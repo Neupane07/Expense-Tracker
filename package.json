@@ -1,0 +1,13 @@
+{
+  "name": "expense-tracker",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "lint": "pnpm -r lint",
+    "build": "pnpm -r build"
+  },
+  "packageManager": "pnpm@11.1.2"
+}

@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+apps/web/dist/
+apps/api/dist/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Prisma
+apps/api/src/generated/prisma/
+apps/api/prisma/migrations/dev.db
+apps/api/prisma/migrations/dev.db-journal
+
+# Uploads / local files
+uploads/
+tmp/
+
+# Coverage
+coverage/
+
+# Nest/Vite cache
+.cache/
+.vite/
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker local volumes if any
+postgres-data/

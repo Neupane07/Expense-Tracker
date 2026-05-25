@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountType {
+  BANK_ACCOUNT
+  CREDIT_CARD
+}
+
+enum SourceType {
+  ICICI_BANK
+  ICICI_AMAZON_PAY_CARD
+}
+
+enum ImportStatus {
+  PENDING
+  PARSED
+  FAILED
+  COMPLETED
+}
+
+enum ExpenseType {
+  EXPENSE
+  TRANSFER
+  INVESTMENT
+  INCOME
+  REFUND
+  REVIEW
+}
+
+enum MatchType {
+  CONTAINS
+  REGEX
+  EXACT
+  STARTS_WITH
+}
+
+model Account {
+  id          String        @id @default(cuid())
+  name        String
+  institution String
+  type        AccountType
+  lastFour    String?
+  imports     Import[]
+  transactions Transaction[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Import {
+  id            String       @id @default(cuid())
+  accountId     String
+  account       Account      @relation(fields: [accountId], references: [id])
+  sourceType    SourceType
+  fileName      String
+  fileHash      String
+  statementFrom DateTime?
+  statementTo   DateTime?
+  status        ImportStatus @default(PENDING)
+  totalRows     Int          @default(0)
+  importedRows  Int          @default(0)
+  duplicateRows Int          @default(0)
+  failedRows    Int          @default(0)
+  errorMessage  String?
+  transactions  Transaction[]
+  createdAt     DateTime     @default(now())
+
+  @@unique([fileHash, accountId])
+}
+
+model Transaction {
+  id               String      @id @default(cuid())
+  accountId        String
+  account          Account     @relation(fields: [accountId], references: [id])
+  importId         String
+  import           Import      @relation(fields: [importId], references: [id])
+  transactionDate  DateTime
+  descriptionRaw   String
+  descriptionClean String
+  moneyOut         Decimal     @db.Decimal(14, 2)
+  moneyIn          Decimal     @db.Decimal(14, 2)
+  netAmount        Decimal     @db.Decimal(14, 2)
+  balance          Decimal?    @db.Decimal(14, 2)
+  referenceNumber  String?
+  transactionHash  String      @unique
+  sourceType       SourceType
+  paymentMethod    String?
+  category         TransactionCategory?
+  createdAt        DateTime    @default(now())
+
+  @@index([transactionDate])
+  @@index([accountId])
+  @@index([sourceType])
+}
+
+model TransactionCategory {
+  id            String      @id @default(cuid())
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  vendor        String
+  category      String
+  subcategory   String?
+  expenseType   ExpenseType
+  ruleId        String?
+  rule          Rule?       @relation(fields: [ruleId], references: [id])
+  confidence    Int         @default(100)
+  isManual      Boolean     @default(false)
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Rule {
+  id          String      @id @default(cuid())
+  priority    Int
+  matchType   MatchType
+  pattern     String
+  vendor      String
+  category    String
+  subcategory String?
+  expenseType ExpenseType
+  isActive    Boolean     @default(true)
+  categories  TransactionCategory[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([priority])
+  @@index([isActive])
+}
