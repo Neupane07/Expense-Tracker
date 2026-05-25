@@ -1,13 +1,14 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
+import type { TransactionFilters } from './transactions.service';
 
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Get()
-  findAll() {
-    return this.transactionsService.findAll();
+  findAll(@Query() filters: TransactionFilters) {
+    return this.transactionsService.findAll(filters);
   }
 
   @Get('review')

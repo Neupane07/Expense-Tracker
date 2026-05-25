@@ -1,13 +1,27 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ExpenseType } from '../generated/prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ExpenseType, SourceType } from '../generated/prisma/client';
+import type { TransactionWhereInput } from '../generated/prisma/models/Transaction';
 import { PrismaService } from '../prisma/prisma.service';
+
+export type TransactionFilters = {
+  month?: string;
+  sourceType?: string;
+  expenseType?: string;
+  category?: string;
+  search?: string;
+};
 
 @Injectable()
 export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(filters: TransactionFilters = {}) {
     return this.prisma.transaction.findMany({
+      where: this.buildWhere(filters),
       include: {
         account: true,
         category: {
@@ -20,6 +34,126 @@ export class TransactionsService {
         transactionDate: 'desc',
       },
     });
+  }
+
+  private buildWhere(filters: TransactionFilters) {
+    const where: TransactionWhereInput = {};
+    const categoryFilters: NonNullable<
+      TransactionWhereInput['category']
+    >['is'] = {};
+
+    if (filters.month) {
+      where.transactionDate = this.getMonthDateRange(filters.month);
+    }
+
+    if (filters.sourceType) {
+      where.sourceType = this.parseSourceType(filters.sourceType);
+    }
+
+    if (filters.expenseType) {
+      categoryFilters.expenseType = this.parseExpenseType(filters.expenseType);
+    }
+
+    if (filters.category) {
+      categoryFilters.category = filters.category;
+    }
+
+    const search = filters.search?.trim();
+
+    if (search) {
+      where.OR = [
+        {
+          descriptionRaw: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          descriptionClean: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          referenceNumber: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          category: {
+            is: {
+              OR: [
+                {
+                  vendor: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  category: {
+                    contains: search,
+                    mode: 'insensitive',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ];
+    }
+
+    if (Object.keys(categoryFilters).length > 0) {
+      where.category = {
+        is: categoryFilters,
+      };
+    }
+
+    return where;
+  }
+
+  private getMonthDateRange(month: string) {
+    const match = /^(\d{4})-(\d{2})$/.exec(month);
+
+    if (!match) {
+      throw new BadRequestException('month must be in YYYY-MM format');
+    }
+
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+
+    if (monthIndex < 0 || monthIndex > 11) {
+      throw new BadRequestException('month must be in YYYY-MM format');
+    }
+
+    return {
+      gte: new Date(Date.UTC(year, monthIndex, 1)),
+      lt: new Date(Date.UTC(year, monthIndex + 1, 1)),
+    };
+  }
+
+  private parseSourceType(sourceType: string) {
+    if (this.isSourceType(sourceType)) {
+      return sourceType;
+    }
+
+    throw new BadRequestException(`Unsupported sourceType: ${sourceType}`);
+  }
+
+  private parseExpenseType(expenseType: string) {
+    if (this.isExpenseType(expenseType)) {
+      return expenseType;
+    }
+
+    throw new BadRequestException(`Unsupported expenseType: ${expenseType}`);
+  }
+
+  private isSourceType(sourceType: string): sourceType is SourceType {
+    return Object.values(SourceType).includes(sourceType as SourceType);
+  }
+
+  private isExpenseType(expenseType: string): expenseType is ExpenseType {
+    return Object.values(ExpenseType).includes(expenseType as ExpenseType);
   }
 
   findReviewQueue() {

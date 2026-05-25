@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AccountType, ExpenseType } from '../generated/prisma/client';
+import type { TransactionWhereInput } from '../generated/prisma/models/Transaction';
 import { PrismaService } from '../prisma/prisma.service';
 
 type DecimalLike = {
@@ -10,56 +11,48 @@ type DecimalLike = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary() {
+  async getSummary(month?: string) {
+    const dateWhere = this.buildDateWhere(month);
     const [
       expense,
       transfer,
       investment,
-      income,
       refund,
       review,
       bankExpense,
       creditCardExpense,
-      uncategorizedCount,
     ] = await Promise.all([
-      this.sumByExpenseType(ExpenseType.EXPENSE),
-      this.sumByExpenseType(ExpenseType.TRANSFER),
-      this.sumByExpenseType(ExpenseType.INVESTMENT),
-      this.sumByExpenseType(ExpenseType.INCOME),
-      this.sumByExpenseType(ExpenseType.REFUND),
-      this.sumByExpenseType(ExpenseType.REVIEW),
-      this.sumExpenseByAccountType(AccountType.BANK_ACCOUNT),
-      this.sumExpenseByAccountType(AccountType.CREDIT_CARD),
-      this.prisma.transaction.count({
-        where: {
-          category: {
-            is: null,
-          },
-        },
-      }),
+      this.sumByExpenseType(ExpenseType.EXPENSE, dateWhere),
+      this.sumByExpenseType(ExpenseType.TRANSFER, dateWhere),
+      this.sumByExpenseType(ExpenseType.INVESTMENT, dateWhere),
+      this.sumByExpenseType(ExpenseType.REFUND, dateWhere),
+      this.sumByExpenseType(ExpenseType.REVIEW, dateWhere),
+      this.sumExpenseByAccountType(AccountType.BANK_ACCOUNT, dateWhere),
+      this.sumExpenseByAccountType(AccountType.CREDIT_CARD, dateWhere),
     ]);
 
     return {
-      totalActualExpense: expense.moneyOut,
-      bankUpiExpense: bankExpense.moneyOut,
+      totalExpense: expense.moneyOut,
+      bankExpense: bankExpense.moneyOut,
       creditCardExpense: creditCardExpense.moneyOut,
       transfersExcluded: transfer.moneyOut,
       investmentsExcluded: investment.moneyOut,
-      income: income.moneyIn,
       refunds: refund.moneyIn,
       reviewAmount: review.moneyOut,
-      reviewCount: review.count,
-      uncategorizedCount,
     };
   }
 
-  private async sumExpenseByAccountType(accountType: AccountType) {
+  private async sumExpenseByAccountType(
+    accountType: AccountType,
+    dateWhere: TransactionWhereInput,
+  ) {
     const aggregate = await this.prisma.transaction.aggregate({
       _sum: {
         moneyOut: true,
         moneyIn: true,
       },
       where: {
+        ...dateWhere,
         account: {
           type: accountType,
         },
@@ -77,36 +70,54 @@ export class DashboardService {
     };
   }
 
-  private async sumByExpenseType(expenseType: ExpenseType) {
-    const [aggregate, count] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        _sum: {
-          moneyOut: true,
-          moneyIn: true,
-        },
-        where: {
-          category: {
-            is: {
-              expenseType,
-            },
+  private async sumByExpenseType(
+    expenseType: ExpenseType,
+    dateWhere: TransactionWhereInput,
+  ) {
+    const aggregate = await this.prisma.transaction.aggregate({
+      _sum: {
+        moneyOut: true,
+        moneyIn: true,
+      },
+      where: {
+        ...dateWhere,
+        category: {
+          is: {
+            expenseType,
           },
         },
-      }),
-      this.prisma.transaction.count({
-        where: {
-          category: {
-            is: {
-              expenseType,
-            },
-          },
-        },
-      }),
-    ]);
+      },
+    });
 
     return {
-      count,
       moneyOut: this.decimalToNumber(aggregate._sum.moneyOut),
       moneyIn: this.decimalToNumber(aggregate._sum.moneyIn),
+    };
+  }
+
+  private buildDateWhere(month?: string) {
+    if (!month) {
+      return {};
+    }
+
+    const match = /^(\d{4})-(\d{2})$/.exec(month);
+
+    if (!match) {
+      throw new BadRequestException('month must be in YYYY-MM format');
+    }
+
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+
+    if (monthIndex < 0 || monthIndex > 11) {
+      throw new BadRequestException('month must be in YYYY-MM format');
+    }
+
+    return {
+      transactionDate: {
+        gte: new Date(Date.UTC(year, monthIndex, 1)),
+        lt: new Date(Date.UTC(year, monthIndex + 1, 1)),
+      },
     };
   }
 
