@@ -44,6 +44,15 @@ Allow user to upload ICICI bank and ICICI Amazon Pay credit card statements, cle
 - Use `@prisma/adapter-pg` and instantiate PrismaClient with `new PrismaClient({ adapter })`.
 - Use ConfigModule globally in NestJS.
 
+## Repository rules
+- This is a single monorepo.
+- Use only the root `.git` repository.
+- Do not initialize Git inside `apps/web` or `apps/api`.
+- Use only the root `pnpm-lock.yaml`.
+- Run workspace commands from the root whenever possible.
+- Keep app-specific `.env` files uncommitted.
+- Commit `.env.example` files.
+
 ## Read before coding
 - `docs/PROJECT_BRIEF.md`
 - `docs/ARCHITECTURE.md`
