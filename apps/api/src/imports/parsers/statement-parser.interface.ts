@@ -1,16 +1,35 @@
-import { SourceType } from '../../generated/prisma/client';
+import { SourceType } from '../../generated/prisma/enums';
+
+export type StatementCell = string | number | Date | null;
+
+export type StatementRow = StatementCell[];
 
 export interface ParsedStatementRow {
-  transactionDate: Date;
-  rawDescription: string;
+  transactionDate: string;
+  descriptionRaw: string;
+  descriptionClean: string;
   moneyOut: number;
   moneyIn: number;
-  balance?: number;
-  referenceNumber?: string;
-  rawRowJson: Record<string, unknown>;
+  netAmount: number;
+  balance: number | null;
+  referenceNumber: string | null;
+  paymentMethod: string | null;
+  sourceType: SourceType;
+}
+
+export interface StatementParsingStats {
+  totalRowsScanned: number;
+  parsedRows: number;
+  skippedRows: number;
+  errors: string[];
+}
+
+export interface StatementPreviewResult {
+  rows: ParsedStatementRow[];
+  stats: StatementParsingStats;
 }
 
 export interface StatementParser {
   readonly sourceType: SourceType;
-  parse(input: Buffer): Promise<ParsedStatementRow[]>;
+  parseRows(rows: StatementRow[]): StatementPreviewResult;
 }
