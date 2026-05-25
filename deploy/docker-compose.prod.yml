@@ -1,0 +1,72 @@
+name: expense
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: expense-postgres
+    restart: unless-stopped
+    env_file:
+      - ${EXPENSE_ENV_FILE:-/opt/apps/expense/.env}
+    environment:
+      POSTGRES_USER: expense_user
+      POSTGRES_DB: expense_tracker
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  api:
+    image: ghcr.io/hbkbimal07/expense-tracker-api:${API_IMAGE_TAG:-latest}
+    container_name: expense-api
+    restart: unless-stopped
+    env_file:
+      - ${EXPENSE_ENV_FILE:-/opt/apps/expense/.env}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - internal
+      - common
+
+  web:
+    image: ghcr.io/hbkbimal07/expense-tracker-web:${WEB_IMAGE_TAG:-latest}
+    container_name: expense-web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - common
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    internal: true
+  common:
+    external: true
+    name: common
+
