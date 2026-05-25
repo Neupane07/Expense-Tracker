@@ -10,8 +10,8 @@ permissions:
   packages: write
 
 env:
-  API_IMAGE: ghcr.io/hbkbimal07/expense-tracker-api
-  WEB_IMAGE: ghcr.io/hbkbimal07/expense-tracker-web
+  API_IMAGE: ghcr.io/neupane07/expense-tracker-api
+  WEB_IMAGE: ghcr.io/neupane07/expense-tracker-web
 
 jobs:
   deploy:
@@ -69,4 +69,3 @@ jobs:
             docker compose pull
             docker compose up -d
             docker image prune -f
-

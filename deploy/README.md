@@ -41,8 +41,8 @@ configuration, so `JWT_SECRET` is not required.
 The Compose stack pulls:
 
 ```text
-ghcr.io/hbkbimal07/expense-tracker-api:latest
-ghcr.io/hbkbimal07/expense-tracker-web:latest
+ghcr.io/neupane07/expense-tracker-api:latest
+ghcr.io/neupane07/expense-tracker-web:latest
 ```
 
 If the GitHub Container Registry packages are public, the VPS can pull them
@@ -137,7 +137,7 @@ The Compose and workflow files intentionally contain the production image
 namespace and public domains for this deployment:
 
 ```text
-ghcr.io/hbkbimal07/expense-tracker-*
+ghcr.io/neupane07/expense-tracker-*
 expense.hbkbimal.xyz
 api.expense.hbkbimal.xyz
 ```

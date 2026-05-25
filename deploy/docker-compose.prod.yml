@@ -21,7 +21,7 @@ services:
       - internal
 
   api:
-    image: ghcr.io/hbkbimal07/expense-tracker-api:${API_IMAGE_TAG:-latest}
+    image: ghcr.io/neupane07/expense-tracker-api:${API_IMAGE_TAG:-latest}
     container_name: expense-api
     restart: unless-stopped
     env_file:
@@ -49,7 +49,7 @@ services:
       - common
 
   web:
-    image: ghcr.io/hbkbimal07/expense-tracker-web:${WEB_IMAGE_TAG:-latest}
+    image: ghcr.io/neupane07/expense-tracker-web:${WEB_IMAGE_TAG:-latest}
     container_name: expense-web
     restart: unless-stopped
     healthcheck:
@@ -69,4 +69,3 @@ networks:
   common:
     external: true
     name: common
-
