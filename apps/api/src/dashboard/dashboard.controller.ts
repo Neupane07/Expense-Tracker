@@ -9,4 +9,9 @@ export class DashboardController {
   getSummary(@Query('month') month?: string) {
     return this.dashboardService.getSummary(month);
   }
+
+  @Get('charts')
+  getCharts() {
+    return this.dashboardService.getCharts();
+  }
 }

@@ -42,6 +42,57 @@ export class DashboardService {
     };
   }
 
+  async getCharts() {
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        category: {
+          is: {
+            expenseType: ExpenseType.EXPENSE,
+          },
+        },
+      },
+      include: {
+        account: true,
+        category: true,
+      },
+      orderBy: {
+        transactionDate: 'asc',
+      },
+    });
+    const categorySpend = new Map<string, number>();
+    const vendorSpend = new Map<string, number>();
+    const sourceSpend = new Map<string, number>();
+    const monthlyTrend = new Map<string, number>();
+
+    transactions.forEach((transaction) => {
+      const amount = this.decimalToNumber(transaction.moneyOut);
+
+      this.addAmount(
+        categorySpend,
+        transaction.category?.category ?? 'Uncategorized',
+        amount,
+      );
+      this.addAmount(
+        vendorSpend,
+        transaction.category?.vendor ?? 'Unknown',
+        amount,
+      );
+      this.addAmount(sourceSpend, transaction.sourceType, amount);
+      this.addAmount(
+        monthlyTrend,
+        this.monthKey(transaction.transactionDate),
+        amount,
+      );
+    });
+
+    return {
+      categorySpend: this.toSortedChartRows(categorySpend),
+      vendorSpend: this.toSortedChartRows(vendorSpend).slice(0, 15),
+      sourceSpend: this.toSortedChartRows(sourceSpend),
+      monthlyTrend: this.toMonthlyRows(monthlyTrend),
+    };
+  }
+
   private async sumExpenseByAccountType(
     accountType: AccountType,
     dateWhere: TransactionWhereInput,
@@ -123,5 +174,34 @@ export class DashboardService {
 
   private decimalToNumber(value: DecimalLike | null | undefined) {
     return value?.toNumber() ?? 0;
+  }
+
+  private addAmount(map: Map<string, number>, key: string, amount: number) {
+    map.set(key, (map.get(key) ?? 0) + amount);
+  }
+
+  private toSortedChartRows(map: Map<string, number>) {
+    return Array.from(map.entries())
+      .map(([name, amount]) => ({
+        name,
+        amount: Math.round(amount * 100) / 100,
+      }))
+      .sort((left, right) => right.amount - left.amount);
+  }
+
+  private toMonthlyRows(map: Map<string, number>) {
+    return Array.from(map.entries())
+      .map(([month, amount]) => ({
+        month,
+        amount: Math.round(amount * 100) / 100,
+      }))
+      .sort((left, right) => left.month.localeCompare(right.month));
+  }
+
+  private monthKey(date: Date) {
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(
+      2,
+      '0',
+    )}`;
   }
 }

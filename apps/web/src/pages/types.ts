@@ -119,3 +119,20 @@ export type DashboardSummary = {
   refunds: number
   reviewAmount: number
 }
+
+export type DashboardChartRow = {
+  name: string
+  amount: number
+}
+
+export type MonthlyTrendRow = {
+  month: string
+  amount: number
+}
+
+export type DashboardCharts = {
+  categorySpend: DashboardChartRow[]
+  vendorSpend: DashboardChartRow[]
+  sourceSpend: DashboardChartRow[]
+  monthlyTrend: MonthlyTrendRow[]
+}
