@@ -73,6 +73,22 @@ export type Rule = {
   isActive: boolean
 }
 
+export type CreateRuleInput = {
+  priority?: number
+  matchType: string
+  pattern: string
+  vendor: string
+  category: string
+  subcategory?: string | null
+  expenseType: string
+}
+
+export type RuleApplySummary = {
+  ruleId: string
+  matchedRows: number
+  updatedRows: number
+}
+
 export type TransactionCategory = {
   vendor: string
   category: string
@@ -85,6 +101,7 @@ export type Transaction = {
   id: string
   transactionDate: string
   descriptionRaw: string
+  descriptionClean: string
   moneyOut: string | number
   moneyIn: string | number
   sourceType: string

@@ -1,6 +1,9 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
-import type { TransactionFilters } from './transactions.service';
+import type {
+  UpdateTransactionCategoryInput,
+  TransactionFilters,
+} from './transactions.service';
 
 @Controller('transactions')
 export class TransactionsController {
@@ -19,5 +22,13 @@ export class TransactionsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.transactionsService.findOne(id);
+  }
+
+  @Patch(':id/category')
+  updateCategory(
+    @Param('id') id: string,
+    @Body() input: UpdateTransactionCategoryInput,
+  ) {
+    return this.transactionsService.updateCategory(id, input);
   }
 }

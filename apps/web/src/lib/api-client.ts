@@ -21,6 +21,26 @@ export async function apiPostFormData<T>(path: string, formData: FormData) {
   })
 }
 
+export async function apiPostJson<T>(path: string, body: unknown) {
+  return apiRequest<T>(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+export async function apiPatchJson<T>(path: string, body: unknown) {
+  return apiRequest<T>(path, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+}
+
 async function apiRequest<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${API_URL}${path}`, init)
 

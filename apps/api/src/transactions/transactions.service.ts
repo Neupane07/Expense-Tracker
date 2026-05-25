@@ -15,6 +15,14 @@ export type TransactionFilters = {
   search?: string;
 };
 
+export type UpdateTransactionCategoryInput = {
+  vendor?: string;
+  category?: string;
+  subcategory?: string | null;
+  expenseType?: string;
+  notes?: string | null;
+};
+
 @Injectable()
 export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -203,5 +211,63 @@ export class TransactionsService {
     }
 
     return transaction;
+  }
+
+  async updateCategory(id: string, input: UpdateTransactionCategoryInput) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(`Transaction ${id} was not found`);
+    }
+
+    const vendor = input.vendor?.trim();
+    const category = input.category?.trim();
+
+    if (!vendor) {
+      throw new BadRequestException('vendor is required');
+    }
+
+    if (!category) {
+      throw new BadRequestException('category is required');
+    }
+
+    if (!input.expenseType) {
+      throw new BadRequestException('expenseType is required');
+    }
+
+    const expenseType = this.parseExpenseType(input.expenseType);
+
+    return this.prisma.transactionCategory.upsert({
+      where: {
+        transactionId: id,
+      },
+      create: {
+        transactionId: id,
+        vendor,
+        category,
+        subcategory: input.subcategory?.trim() || null,
+        expenseType,
+        confidence: 100,
+        isManual: true,
+        notes: input.notes?.trim() || null,
+      },
+      update: {
+        vendor,
+        category,
+        subcategory: input.subcategory?.trim() || null,
+        expenseType,
+        ruleId: null,
+        confidence: 100,
+        isManual: true,
+        notes: input.notes?.trim() || null,
+      },
+      include: {
+        transaction: true,
+        rule: true,
+      },
+    });
   }
 }
