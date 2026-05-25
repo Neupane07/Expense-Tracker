@@ -28,6 +28,20 @@ export class ImportsController {
     });
   }
 
+  @Post()
+  @UseInterceptors(FileInterceptor('file'))
+  create(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('sourceType') sourceType: string,
+    @Body('accountId') accountId: string,
+  ) {
+    return this.importsService.create({
+      file,
+      sourceType,
+      accountId,
+    });
+  }
+
   @Get()
   findAll() {
     return this.importsService.findAll();
