@@ -11,7 +11,18 @@ export class ApiError extends Error {
 }
 
 export async function apiGet<T>(path: string) {
-  const response = await fetch(`${API_URL}${path}`)
+  return apiRequest<T>(path)
+}
+
+export async function apiPostFormData<T>(path: string, formData: FormData) {
+  return apiRequest<T>(path, {
+    method: "POST",
+    body: formData,
+  })
+}
+
+async function apiRequest<T>(path: string, init?: RequestInit) {
+  const response = await fetch(`${API_URL}${path}`, init)
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`

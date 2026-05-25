@@ -19,6 +19,48 @@ export type ImportRecord = {
   account?: Account
 }
 
+export type ImportDetail = ImportRecord & {
+  transactions: Transaction[]
+}
+
+export type ImportPreviewRow = {
+  transactionDate: string
+  descriptionRaw: string
+  descriptionClean: string
+  moneyOut: number
+  moneyIn: number
+  netAmount: number
+  balance: number | null
+  referenceNumber: string | null
+  paymentMethod: string | null
+  sourceType: string
+}
+
+export type ImportPreview = {
+  accountId: string
+  sourceType: string
+  rows: ImportPreviewRow[]
+  stats: {
+    totalRowsScanned: number
+    parsedRows: number
+    skippedRows: number
+    errors: string[]
+  }
+}
+
+export type ImportSummary = {
+  importId: string
+  accountId: string
+  sourceType: string
+  fileName: string
+  status: string
+  totalRows: number
+  importedRows: number
+  duplicateRows: number
+  failedRows: number
+  errors: string[]
+}
+
 export type Rule = {
   id: string
   priority: number
