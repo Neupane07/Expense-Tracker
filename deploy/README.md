@@ -71,7 +71,7 @@ included in the versioned API image; API startup never runs migrations:
 
 ```bash
 docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy --config apps/api/prisma.config.ts
-docker compose up -d
+docker compose up -d --wait --wait-timeout 90
 ```
 
 For later image-only deployments, GitHub Actions performs:
@@ -79,7 +79,7 @@ For later image-only deployments, GitHub Actions performs:
 ```bash
 cd /opt/apps/expense
 docker compose pull
-docker compose up -d
+docker compose up -d --wait --wait-timeout 90
 docker image prune -f
 ```
 
@@ -100,6 +100,15 @@ api.expense.hbkbimal.xyz {
 }
 ```
 
+Replace any placeholder `respond` blocks for these two hostnames with the
+`reverse_proxy` blocks above, then reload the separately managed Caddy
+deployment using its existing Compose directory:
+
+```bash
+cd /opt/proxy
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
 Neither PostgreSQL nor either application service publishes a host port.
 Caddy reaches only `expense-web` and `expense-api` on the shared external
 network; PostgreSQL is available only on the private Compose network.
@@ -112,7 +121,7 @@ To roll back to a known successful SHA:
 ```bash
 cd /opt/apps/expense
 API_IMAGE_TAG=<git-sha> WEB_IMAGE_TAG=<git-sha> docker compose pull
-API_IMAGE_TAG=<git-sha> WEB_IMAGE_TAG=<git-sha> docker compose up -d
+API_IMAGE_TAG=<git-sha> WEB_IMAGE_TAG=<git-sha> docker compose up -d --wait --wait-timeout 90
 ```
 
 Database schema rollbacks require a separately reviewed database recovery or
