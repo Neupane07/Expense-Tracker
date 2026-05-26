@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AccountsModule } from './accounts/accounts.module';
+import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { ImportsModule } from './imports/imports.module';
@@ -14,6 +15,7 @@ import { TransactionsModule } from './transactions/transactions.module';
       isGlobal: true,
     }),
     PrismaModule,
+    AuthModule,
     HealthModule,
     AccountsModule,
     ImportsModule,

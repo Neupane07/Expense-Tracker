@@ -32,9 +32,11 @@ export class ImportsService {
     private readonly iciciAmazonCardParser: IciciAmazonCardParser,
   ) {}
 
-  async preview(input: ImportPreviewInput) {
-    const { file, sourceType, accountId } =
-      await this.validateImportInput(input);
+  async preview(userId: string, input: ImportPreviewInput) {
+    const { file, sourceType, accountId } = await this.validateImportInput(
+      userId,
+      input,
+    );
     const preview = this.parseFileForPreview(file, sourceType);
 
     return {
@@ -44,12 +46,15 @@ export class ImportsService {
     };
   }
 
-  async create(input: ImportPreviewInput) {
-    const { file, sourceType, accountId } =
-      await this.validateImportInput(input);
+  async create(userId: string, input: ImportPreviewInput) {
+    const { file, sourceType, accountId } = await this.validateImportInput(
+      userId,
+      input,
+    );
     const fileHash = this.hashBuffer(file.buffer);
     const importRecord = await this.createImportRecord({
       accountId,
+      userId,
       sourceType,
       fileName: file.originalname,
       fileHash,
@@ -59,6 +64,7 @@ export class ImportsService {
       const preview = this.parseFileForPreview(file, sourceType);
       const rules = await this.prisma.rule.findMany({
         where: {
+          userId,
           isActive: true,
         },
         orderBy: [
@@ -74,6 +80,7 @@ export class ImportsService {
         (
           await this.prisma.transaction.findMany({
             where: {
+              userId,
               transactionHash: {
                 in: preview.rows.map((row) =>
                   this.createTransactionHash(accountId, row),
@@ -109,6 +116,7 @@ export class ImportsService {
           );
           const transaction = await this.prisma.transaction.create({
             data: {
+              userId,
               accountId,
               importId: importRecord.id,
               transactionDate: this.parseTransactionDate(row.transactionDate),
@@ -200,8 +208,9 @@ export class ImportsService {
     }
   }
 
-  findAll() {
+  findAll(userId: string) {
     return this.prisma.import.findMany({
+      where: { userId },
       include: {
         account: true,
         _count: {
@@ -216,9 +225,9 @@ export class ImportsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(userId: string, id: string) {
     const importRecord = await this.prisma.import.findUnique({
-      where: { id },
+      where: { id_userId: { id, userId } },
       include: {
         account: true,
         transactions: {
@@ -259,7 +268,7 @@ export class ImportsService {
     throw new BadRequestException(`Unsupported sourceType: ${sourceType}`);
   }
 
-  private async validateImportInput(input: ImportPreviewInput) {
+  private async validateImportInput(userId: string, input: ImportPreviewInput) {
     if (!input.file?.buffer) {
       throw new BadRequestException('file is required');
     }
@@ -271,7 +280,10 @@ export class ImportsService {
     const sourceType = this.parseSourceType(input.sourceType);
     const account = await this.prisma.account.findUnique({
       where: {
-        id: input.accountId,
+        id_userId: {
+          id: input.accountId,
+          userId,
+        },
       },
     });
 
@@ -304,6 +316,7 @@ export class ImportsService {
   }
 
   private async createImportRecord(input: {
+    userId: string;
     accountId: string;
     sourceType: SourceType;
     fileName: string;
@@ -312,6 +325,7 @@ export class ImportsService {
     try {
       return await this.prisma.import.create({
         data: {
+          userId: input.userId,
           accountId: input.accountId,
           sourceType: input.sourceType,
           fileName: input.fileName,

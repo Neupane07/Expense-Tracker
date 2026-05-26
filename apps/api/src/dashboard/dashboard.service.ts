@@ -11,7 +11,7 @@ type DecimalLike = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary(month?: string) {
+  async getSummary(userId: string, month?: string) {
     const dateWhere = this.buildDateWhere(month);
     const [
       expense,
@@ -22,13 +22,13 @@ export class DashboardService {
       bankExpense,
       creditCardExpense,
     ] = await Promise.all([
-      this.sumByExpenseType(ExpenseType.EXPENSE, dateWhere),
-      this.sumByExpenseType(ExpenseType.TRANSFER, dateWhere),
-      this.sumByExpenseType(ExpenseType.INVESTMENT, dateWhere),
-      this.sumByExpenseType(ExpenseType.REFUND, dateWhere),
-      this.sumByExpenseType(ExpenseType.REVIEW, dateWhere),
-      this.sumExpenseByAccountType(AccountType.BANK_ACCOUNT, dateWhere),
-      this.sumExpenseByAccountType(AccountType.CREDIT_CARD, dateWhere),
+      this.sumByExpenseType(userId, ExpenseType.EXPENSE, dateWhere),
+      this.sumByExpenseType(userId, ExpenseType.TRANSFER, dateWhere),
+      this.sumByExpenseType(userId, ExpenseType.INVESTMENT, dateWhere),
+      this.sumByExpenseType(userId, ExpenseType.REFUND, dateWhere),
+      this.sumByExpenseType(userId, ExpenseType.REVIEW, dateWhere),
+      this.sumExpenseByAccountType(userId, AccountType.BANK_ACCOUNT, dateWhere),
+      this.sumExpenseByAccountType(userId, AccountType.CREDIT_CARD, dateWhere),
     ]);
 
     return {
@@ -42,9 +42,10 @@ export class DashboardService {
     };
   }
 
-  async getCharts() {
+  async getCharts(userId: string) {
     const transactions = await this.prisma.transaction.findMany({
       where: {
+        userId,
         category: {
           is: {
             expenseType: ExpenseType.EXPENSE,
@@ -94,6 +95,7 @@ export class DashboardService {
   }
 
   private async sumExpenseByAccountType(
+    userId: string,
     accountType: AccountType,
     dateWhere: TransactionWhereInput,
   ) {
@@ -104,6 +106,7 @@ export class DashboardService {
       },
       where: {
         ...dateWhere,
+        userId,
         account: {
           type: accountType,
         },
@@ -122,6 +125,7 @@ export class DashboardService {
   }
 
   private async sumByExpenseType(
+    userId: string,
     expenseType: ExpenseType,
     dateWhere: TransactionWhereInput,
   ) {
@@ -132,6 +136,7 @@ export class DashboardService {
       },
       where: {
         ...dateWhere,
+        userId,
         category: {
           is: {
             expenseType,

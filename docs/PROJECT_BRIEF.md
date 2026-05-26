@@ -15,14 +15,20 @@ A simple personal finance app that imports statement files, cleans them, stores 
 6. Apply categorization rules.
 7. Show review queue.
 8. Show monthly dashboard.
+9. Secure invite-only access with Google sign-in and private user-owned data.
 
 ## Not in MVP
 - Direct ICICI Bank API.
 - Account Aggregator.
-- Multi-user auth.
 - Gmail auto-import.
 - Budget prediction.
 - AI categorization.
 
 ## Important accounting rule
 Bank credit card bill payment is not expense. Actual card transactions are expenses.
+
+## Access model
+- Authentication uses verified Google identities and server-managed cookie sessions.
+- The first administrator is the verified email configured in `INITIAL_ADMIN_EMAIL`.
+- All later users require an unused invitation; roles are `ADMIN` and `MEMBER`.
+- Accounts, imports, transactions, and categorization rules belong to one user and are never returned across owners.

@@ -41,8 +41,27 @@ export async function apiPatchJson<T>(path: string, body: unknown) {
   })
 }
 
+export async function apiDelete<T>(path: string) {
+  return apiRequest<T>(path, {
+    method: "DELETE",
+  })
+}
+
+export async function apiPostVoid(path: string) {
+  await apiRequest<void>(path, {
+    method: "POST",
+  })
+}
+
+export function apiUrl(path: string) {
+  return `${API_URL}${path}`
+}
+
 async function apiRequest<T>(path: string, init?: RequestInit) {
-  const response = await fetch(`${API_URL}${path}`, init)
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    credentials: "include",
+  })
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`
@@ -57,6 +76,10 @@ async function apiRequest<T>(path: string, init?: RequestInit) {
     }
 
     throw new ApiError(message, response.status)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
   }
 
   return (await response.json()) as T

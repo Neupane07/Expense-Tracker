@@ -16,6 +16,13 @@
 
 ## Main pages
 
+### Sign In
+Route: `/sign-in`
+
+- Google sign-in action only.
+- Show invite-only access messaging and an unauthorized-invite state.
+- Do not mount or query financial pages until session discovery confirms authentication.
+
 ### Upload Statement
 Route: `/imports/new`
 
@@ -95,6 +102,13 @@ Charts:
 - Vendor-wise spend
 - Source-wise spend
 - Monthly trend
+
+### Invitations
+Route: `/admin/invitations`
+
+- Visible only to administrators.
+- Create a one-time Google email invitation with MEMBER or ADMIN role.
+- Show accepted/revoked status and revoke unused invitations.
 
 ## shadcn/ui usage
 Use these components first:

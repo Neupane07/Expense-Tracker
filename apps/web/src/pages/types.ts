@@ -6,6 +6,23 @@ export type Account = {
   lastFour: string | null
 }
 
+export type CurrentUser = {
+  id: string
+  email: string
+  name: string | null
+  avatarUrl: string | null
+  role: "ADMIN" | "MEMBER"
+}
+
+export type Invitation = {
+  id: string
+  email: string
+  role: "ADMIN" | "MEMBER"
+  createdAt: string
+  usedAt: string | null
+  revokedAt: string | null
+}
+
 export type ImportRecord = {
   id: string
   fileName: string

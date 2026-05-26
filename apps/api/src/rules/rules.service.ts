@@ -20,8 +20,9 @@ export type CreateRuleInput = {
 export class RulesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(userId: string) {
     return this.prisma.rule.findMany({
+      where: { userId },
       orderBy: [
         {
           priority: 'asc',
@@ -33,9 +34,9 @@ export class RulesService {
     });
   }
 
-  async findOne(id: string) {
-    const rule = await this.prisma.rule.findUnique({
-      where: { id },
+  async findOne(userId: string, id: string) {
+    const rule = await this.prisma.rule.findFirst({
+      where: { id, userId },
       include: {
         _count: {
           select: {
@@ -52,7 +53,7 @@ export class RulesService {
     return rule;
   }
 
-  async create(input: CreateRuleInput) {
+  async create(userId: string, input: CreateRuleInput) {
     const pattern = input.pattern?.trim();
     const vendor = input.vendor?.trim();
     const category = input.category?.trim();
@@ -79,6 +80,7 @@ export class RulesService {
       ),
       Promise.resolve(this.parseExpenseType(input.expenseType)),
       this.prisma.rule.aggregate({
+        where: { userId },
         _max: {
           priority: true,
         },
@@ -87,6 +89,7 @@ export class RulesService {
 
     return this.prisma.rule.create({
       data: {
+        userId,
         priority: input.priority ?? (maxPriority._max.priority ?? 0) + 10,
         matchType,
         pattern,
@@ -99,9 +102,9 @@ export class RulesService {
     });
   }
 
-  async apply(id: string) {
-    const rule = await this.prisma.rule.findUnique({
-      where: { id },
+  async apply(userId: string, id: string) {
+    const rule = await this.prisma.rule.findFirst({
+      where: { id, userId },
     });
 
     if (!rule) {
@@ -109,6 +112,7 @@ export class RulesService {
     }
 
     const candidates = await this.prisma.transaction.findMany({
+      where: { userId },
       include: {
         category: true,
       },

@@ -4,9 +4,12 @@ import {
   ListChecks,
   ReceiptText,
   Route,
+  ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react"
 import { NavLink, Outlet, useLocation } from "react-router-dom"
+import { useAuth } from "@/auth/use-auth"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 const navigation = [
@@ -23,11 +26,20 @@ const routeTitles = new Map([
   ["/transactions", "Transactions"],
   ["/review", "Review Queue"],
   ["/rules", "Categorization Rules"],
+  ["/admin/invitations", "Invitations"],
 ])
 
 export function AppLayout() {
   const location = useLocation()
+  const { user, signOut } = useAuth()
   const pageTitle = routeTitles.get(location.pathname) ?? "Expense Tracker"
+  const visibleNavigation =
+    user?.role === "ADMIN"
+      ? [
+          ...navigation,
+          { href: "/admin/invitations", label: "Invitations", icon: ShieldCheck },
+        ]
+      : navigation
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -42,7 +54,7 @@ export function AppLayout() {
           </div>
         </div>
         <nav className="space-y-1 px-3 py-4">
-          {navigation.map((item) => (
+          {visibleNavigation.map((item) => (
             <NavLink
               key={item.href}
               to={item.href}
@@ -69,8 +81,21 @@ export function AppLayout() {
               </p>
               <h1 className="mt-1 text-xl font-semibold">{pageTitle}</h1>
             </div>
-            <nav className="flex gap-1 overflow-x-auto lg:hidden">
-              {navigation.map((item) => (
+            <div className="flex items-center gap-3">
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-medium">{user?.name ?? user?.email}</p>
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void signOut().catch(() => undefined)}
+              >
+                Sign out
+              </Button>
+            </div>
+            <nav className="flex gap-1 overflow-x-auto lg:hidden md:order-3 md:w-full">
+              {visibleNavigation.map((item) => (
                 <NavLink
                   key={item.href}
                   to={item.href}

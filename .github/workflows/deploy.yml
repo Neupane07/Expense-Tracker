@@ -67,5 +67,8 @@ jobs:
           script: |
             cd /opt/apps/expense
             docker compose pull
+            docker compose stop api web
+            docker compose up -d postgres
+            docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy --config apps/api/prisma.config.ts
             docker compose up -d --wait --wait-timeout 90
             docker image prune -f

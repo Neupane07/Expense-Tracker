@@ -1,28 +1,35 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { SessionAuthGuard } from '../auth/session-auth.guard';
 import { RulesService } from './rules.service';
 import type { CreateRuleInput } from './rules.service';
 
 @Controller('rules')
+@UseGuards(SessionAuthGuard)
 export class RulesController {
   constructor(private readonly rulesService: RulesService) {}
 
   @Get()
-  findAll() {
-    return this.rulesService.findAll();
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.rulesService.findAll(user.id);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.rulesService.findOne(id);
+  findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.rulesService.findOne(user.id, id);
   }
 
   @Post()
-  create(@Body() input: CreateRuleInput) {
-    return this.rulesService.create(input);
+  create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() input: CreateRuleInput,
+  ) {
+    return this.rulesService.create(user.id, input);
   }
 
   @Post(':id/apply')
-  apply(@Param('id') id: string) {
-    return this.rulesService.apply(id);
+  apply(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.rulesService.apply(user.id, id);
   }
 }

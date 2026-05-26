@@ -5,8 +5,9 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(userId: string) {
     return this.prisma.account.findMany({
+      where: { userId },
       orderBy: [
         {
           type: 'asc',

@@ -12,6 +12,11 @@ src/
   prisma/
     prisma.module.ts
     prisma.service.ts
+  auth/
+    auth.module.ts
+    auth.controller.ts
+    auth.service.ts
+    session-auth.guard.ts
   imports/
     imports.module.ts
     imports.controller.ts
@@ -34,15 +39,22 @@ src/
     dashboard.service.ts
 
 ## Data flow
-1. User uploads statement.
-2. API stores import record.
-3. Parser extracts raw rows.
-4. Normalizer converts rows to common transaction format.
-5. Deduplication hash is generated.
-6. New transactions are saved.
-7. Rules are applied.
-8. Unmatched transactions go to review.
-9. Dashboard queries categorized transactions.
+1. A verified, invited Google identity establishes an opaque server session in an HttpOnly cookie.
+2. Authenticated user uploads statement.
+3. API stores a user-owned import record.
+4. Parser extracts raw rows.
+5. Normalizer converts rows to common transaction format.
+6. Deduplication hash is generated.
+7. New user-owned transactions are saved.
+8. That user's rules are applied.
+9. Unmatched transactions go to review.
+10. Dashboard queries that user's categorized transactions.
+
+## Authentication boundary
+- `/health`, Google initiation/callback, and session discovery are the only public API surfaces.
+- Financial controllers require a persisted server session and derive `userId` from it.
+- The browser receives an opaque Secure HttpOnly session cookie, never an application token in local storage.
+- Administrator invitation routes require both an authenticated session and `ADMIN` role.
 
 ## Parser responsibility
 Parser only extracts:

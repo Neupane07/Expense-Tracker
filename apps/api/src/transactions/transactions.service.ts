@@ -27,9 +27,9 @@ export type UpdateTransactionCategoryInput = {
 export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(filters: TransactionFilters = {}) {
+  findAll(userId: string, filters: TransactionFilters = {}) {
     return this.prisma.transaction.findMany({
-      where: this.buildWhere(filters),
+      where: this.buildWhere(userId, filters),
       include: {
         account: true,
         category: {
@@ -44,8 +44,8 @@ export class TransactionsService {
     });
   }
 
-  private buildWhere(filters: TransactionFilters) {
-    const where: TransactionWhereInput = {};
+  private buildWhere(userId: string, filters: TransactionFilters) {
+    const where: TransactionWhereInput = { userId };
     const categoryFilters: NonNullable<
       TransactionWhereInput['category']
     >['is'] = {};
@@ -164,9 +164,10 @@ export class TransactionsService {
     return Object.values(ExpenseType).includes(expenseType as ExpenseType);
   }
 
-  findReviewQueue() {
+  findReviewQueue(userId: string) {
     return this.prisma.transaction.findMany({
       where: {
+        userId,
         OR: [
           {
             category: {
@@ -192,9 +193,9 @@ export class TransactionsService {
     });
   }
 
-  async findOne(id: string) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id },
+  async findOne(userId: string, id: string) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id, userId },
       include: {
         account: true,
         import: true,
@@ -213,9 +214,13 @@ export class TransactionsService {
     return transaction;
   }
 
-  async updateCategory(id: string, input: UpdateTransactionCategoryInput) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id },
+  async updateCategory(
+    userId: string,
+    id: string,
+    input: UpdateTransactionCategoryInput,
+  ) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id, userId },
       select: { id: true },
     });
 

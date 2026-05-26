@@ -28,13 +28,35 @@ Create `/opt/apps/expense/.env` with restrictive permissions:
 cat > /opt/apps/expense/.env <<'EOF'
 POSTGRES_PASSWORD=replace_with_a_long_random_password
 DATABASE_URL=postgresql://expense_user:replace_with_url_encoded_password@postgres:5432/expense_tracker?schema=public
+FRONTEND_URL=https://expense.hbkbimal.xyz
+CORS_ORIGINS=https://expense.hbkbimal.xyz
+GOOGLE_CLIENT_ID=replace_with_google_web_client_id
+GOOGLE_CLIENT_SECRET=replace_with_google_web_client_secret
+GOOGLE_CALLBACK_URL=https://api.expense.hbkbimal.xyz/auth/google/callback
+INITIAL_ADMIN_EMAIL=allowed.admin@example.com
+AUTH_COOKIE_SECRET=replace_with_at_least_32_random_bytes
+SESSION_MAX_AGE_DAYS=30
 EOF
 chmod 600 /opt/apps/expense/.env
 ```
 
 Use the same password in both values and percent-encode special characters in
-the password portion of `DATABASE_URL`. The current API has no JWT
-configuration, so `JWT_SECRET` is not required.
+the password portion of `DATABASE_URL`. Generate `AUTH_COOKIE_SECRET` with a
+cryptographically random value, for example `openssl rand -base64 48`.
+`INITIAL_ADMIN_EMAIL` must be the exact Google email allowed to create the
+first administrator account; it does not bypass Google's verified-email
+check.
+
+Create a Google OAuth web application with these production settings:
+
+```text
+Authorized JavaScript origin: https://expense.hbkbimal.xyz
+Authorized redirect URI:      https://api.expense.hbkbimal.xyz/auth/google/callback
+```
+
+Only a verified Google identity matching `INITIAL_ADMIN_EMAIL` or an unused
+administrator-issued invitation may create a session. Sessions are persisted
+by the API and delivered using Secure HttpOnly cookies.
 
 ## GHCR Access
 
@@ -74,17 +96,54 @@ docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy -
 docker compose up -d --wait --wait-timeout 90
 ```
 
-For later image-only deployments, GitHub Actions performs:
+For later deployments, GitHub Actions stops application traffic, applies any
+pending migrations using the newly pulled API image, and then starts the
+updated services:
 
 ```bash
 cd /opt/apps/expense
 docker compose pull
+docker compose stop api web
+docker compose up -d postgres
+docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy --config apps/api/prisma.config.ts
 docker compose up -d --wait --wait-timeout 90
 docker image prune -f
 ```
 
-Run the explicit migration command before `docker compose up -d` whenever a
-release includes a new Prisma migration.
+This ordering is required for releases that introduce an authorization
+boundary: an older unauthenticated API must not remain available after rows
+receive their new ownership columns.
+
+## Multi-User Migration
+
+The multi-user migration assigns all pre-auth accounts, imports, transactions,
+and rules to an internal quarantine owner with no Google identity. Those rows
+cannot be read through authenticated API routes until explicitly assigned to
+the configured first administrator.
+
+When upgrading an existing deployment from the unauthenticated release, stop
+the old API before migrating so it cannot serve data during the transition:
+
+```bash
+cd /opt/apps/expense
+docker compose pull
+docker compose stop api web
+docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy --config apps/api/prisma.config.ts
+docker compose up -d --wait --wait-timeout 90
+```
+
+Then sign in once with the verified Google account in
+`INITIAL_ADMIN_EMAIL`, and assign the quarantined legacy records:
+
+```bash
+docker compose run --rm api pnpm --dir apps/api legacy:assign-initial-admin
+```
+
+The command refuses to run until that administrator has completed verified
+Google sign-in. While quarantined legacy accounts or rules exist, that initial
+administrator is not provisioned with empty starter copies; assignment
+restores the original records without duplicate account names. For a new empty
+database the command safely reports zero legacy rows.
 
 ## Caddy Configuration
 
