@@ -71,6 +71,7 @@ export function parseStatementRows(
       totalRowsScanned: rows.length,
       parsedRows: parsedRows.length,
       skippedRows: rows.length - parsedRows.length,
+      recognizedTable: headerIndex !== -1,
       errors,
     },
   };
@@ -90,7 +91,7 @@ export function buildHeaderMap(
       RegExp[],
     ][]) {
       if (
-        !headerMap[field] &&
+        headerMap[field] === undefined &&
         patterns.some((pattern) => pattern.test(value))
       ) {
         headerMap[field] = index;
@@ -191,7 +192,7 @@ export function parseMoney(value: StatementCell) {
 
   const normalized = text
     .replace(/[₹,]/g, '')
-    .replace(/\b(inr|rs\.?|dr|cr)\b/gi, '')
+    .replace(/\b(?:inr|rs|dr|cr)\b\.?/gi, '')
     .replace(/[()]/g, '')
     .trim();
   const number = Number(normalized);

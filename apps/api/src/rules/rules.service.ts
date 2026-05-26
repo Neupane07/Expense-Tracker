@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ExpenseType, MatchType, Rule } from '../generated/prisma/client';
+import { getProtectedAutomaticCategory } from '../imports/automatic-category-protection';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type CreateRuleInput = {
@@ -122,29 +123,46 @@ export class RulesService {
     );
 
     for (const transaction of matchingTransactions) {
+      const protectedCategory = getProtectedAutomaticCategory(
+        transaction,
+        rule.expenseType,
+      );
       await this.prisma.transactionCategory.upsert({
         where: {
           transactionId: transaction.id,
         },
-        create: {
-          transactionId: transaction.id,
-          vendor: rule.vendor,
-          category: rule.category,
-          subcategory: rule.subcategory,
-          expenseType: rule.expenseType,
-          ruleId: rule.id,
-          confidence: 100,
-          isManual: false,
-        },
-        update: {
-          vendor: rule.vendor,
-          category: rule.category,
-          subcategory: rule.subcategory,
-          expenseType: rule.expenseType,
-          ruleId: rule.id,
-          confidence: 100,
-          isManual: false,
-        },
+        create: protectedCategory
+          ? {
+              transactionId: transaction.id,
+              ...protectedCategory,
+              ruleId: null,
+              isManual: false,
+            }
+          : {
+              transactionId: transaction.id,
+              vendor: rule.vendor,
+              category: rule.category,
+              subcategory: rule.subcategory,
+              expenseType: rule.expenseType,
+              ruleId: rule.id,
+              confidence: 100,
+              isManual: false,
+            },
+        update: protectedCategory
+          ? {
+              ...protectedCategory,
+              ruleId: null,
+              isManual: false,
+            }
+          : {
+              vendor: rule.vendor,
+              category: rule.category,
+              subcategory: rule.subcategory,
+              expenseType: rule.expenseType,
+              ruleId: rule.id,
+              confidence: 100,
+              isManual: false,
+            },
       });
     }
 

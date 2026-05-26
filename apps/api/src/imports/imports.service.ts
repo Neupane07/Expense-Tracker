@@ -13,6 +13,7 @@ import {
   SourceType,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getProtectedAutomaticCategory } from './automatic-category-protection';
 import { IciciAmazonCardParser } from './parsers/icici-amazon-card.parser';
 import { IciciBankParser } from './parsers/icici-bank.parser';
 import { ParsedStatementRow } from './parsers/statement-parser.interface';
@@ -114,6 +115,10 @@ export class ImportsService {
             rules,
             row.descriptionClean,
           );
+          const protectedCategory = getProtectedAutomaticCategory(
+            row,
+            matchedRule?.expenseType,
+          );
           const transaction = await this.prisma.transaction.create({
             data: {
               userId,
@@ -134,26 +139,33 @@ export class ImportsService {
           });
 
           await this.prisma.transactionCategory.create({
-            data: matchedRule
+            data: protectedCategory
               ? {
                   transactionId: transaction.id,
-                  vendor: matchedRule.vendor,
-                  category: matchedRule.category,
-                  subcategory: matchedRule.subcategory,
-                  expenseType: matchedRule.expenseType,
-                  ruleId: matchedRule.id,
-                  confidence: 100,
+                  ...protectedCategory,
+                  ruleId: null,
                   isManual: false,
                 }
-              : {
-                  transactionId: transaction.id,
-                  vendor: 'Manual Review',
-                  category: 'Manual Review',
-                  expenseType: ExpenseType.REVIEW,
-                  confidence: 0,
-                  isManual: false,
-                  notes: 'No matching rule found during import.',
-                },
+              : matchedRule
+                ? {
+                    transactionId: transaction.id,
+                    vendor: matchedRule.vendor,
+                    category: matchedRule.category,
+                    subcategory: matchedRule.subcategory,
+                    expenseType: matchedRule.expenseType,
+                    ruleId: matchedRule.id,
+                    confidence: 100,
+                    isManual: false,
+                  }
+                : {
+                    transactionId: transaction.id,
+                    vendor: 'Manual Review',
+                    category: 'Manual Review',
+                    expenseType: ExpenseType.REVIEW,
+                    confidence: 0,
+                    isManual: false,
+                    notes: 'No matching rule found during import.',
+                  },
           });
 
           seenHashes.add(transactionHash);
@@ -302,10 +314,10 @@ export class ImportsService {
     file: Express.Multer.File,
     sourceType: SourceType,
   ) {
+    let tableRows;
+
     try {
-      const tableRows = readStatementFile(file.originalname, file.buffer);
-      const parser = this.parserForSourceType(sourceType);
-      return parser.parseRows(tableRows);
+      tableRows = readStatementFile(file.originalname, file.buffer);
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error
@@ -313,6 +325,30 @@ export class ImportsService {
           : 'Unable to read statement file',
       );
     }
+
+    const parser = this.parserForSourceType(sourceType);
+    const preview = parser.parseRows(tableRows);
+    const sourceName = this.sourceName(sourceType);
+
+    if (!preview.stats.recognizedTable) {
+      throw new BadRequestException(
+        `No recognized ${sourceName} transaction table was found. Expected a transaction header row in the uploaded statement.`,
+      );
+    }
+
+    if (preview.rows.length === 0) {
+      throw new BadRequestException(
+        `A ${sourceName} transaction table was found, but it contains no valid transaction rows. Check the statement period and file format.`,
+      );
+    }
+
+    return preview;
+  }
+
+  private sourceName(sourceType: SourceType) {
+    return sourceType === SourceType.ICICI_BANK
+      ? 'ICICI Bank'
+      : 'ICICI Amazon Pay Card';
   }
 
   private async createImportRecord(input: {

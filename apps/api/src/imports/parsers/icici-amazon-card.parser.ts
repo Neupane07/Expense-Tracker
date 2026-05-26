@@ -33,7 +33,12 @@ export class IciciAmazonCardParser implements StatementParser {
 
 const cardHeaderAliases: Record<keyof HeaderMap, RegExp[]> = {
   date: [/transaction\s*date/, /\bdate\b/],
-  description: [/details?/, /description/, /merchant/, /transaction/],
+  description: [
+    /details?/,
+    /description/,
+    /merchant/,
+    /transaction\s*(?:details?|description)/,
+  ],
   moneyOut: [/debit/, /\bdr\b/],
   moneyIn: [/credit/, /\bcr\b/],
   amount: [/amount/],

@@ -21,6 +21,7 @@ export interface StatementParsingStats {
   totalRowsScanned: number;
   parsedRows: number;
   skippedRows: number;
+  recognizedTable: boolean;
   errors: string[];
 }
 
