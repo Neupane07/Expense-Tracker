@@ -4,6 +4,12 @@ import { useAuth } from "@/auth/use-auth"
 import { AppLayout } from "@/components/layout/app-layout"
 import { AdminInvitationsPage } from "@/pages/admin-invitations-page"
 import { DashboardPage } from "@/pages/dashboard-page"
+import {
+  PortfolioPage,
+  ResearchPage,
+  SwingScannerPage,
+  TradeJournalPage,
+} from "@/pages/finance-placeholder-page"
 import { ImportsPage } from "@/pages/imports-page"
 import { LoadingState } from "@/pages/page-state"
 import { ReviewPage } from "@/pages/review-page"
@@ -48,6 +54,10 @@ function AppRoutes() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/review" element={<ReviewPage />} />
         <Route path="/rules" element={<RulesPage />} />
+        <Route path="/portfolio" element={<PortfolioPage />} />
+        <Route path="/scanner" element={<SwingScannerPage />} />
+        <Route path="/trade-journal" element={<TradeJournalPage />} />
+        <Route path="/research" element={<ResearchPage />} />
         {user.role === "ADMIN" ? (
           <Route path="/admin/invitations" element={<AdminInvitationsPage />} />
         ) : null}

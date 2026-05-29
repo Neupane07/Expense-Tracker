@@ -1,9 +1,13 @@
 import {
   BarChart3,
+  BookOpenText,
+  BriefcaseBusiness,
+  ClipboardList,
   FileSpreadsheet,
   ListChecks,
   ReceiptText,
   Route,
+  ScanSearch,
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react"
@@ -18,6 +22,10 @@ const navigation = [
   { href: "/transactions", label: "Transactions", icon: ReceiptText },
   { href: "/review", label: "Review", icon: ListChecks },
   { href: "/rules", label: "Rules", icon: SlidersHorizontal },
+  { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
+  { href: "/scanner", label: "Swing Scanner", icon: ScanSearch },
+  { href: "/trade-journal", label: "Trade Journal", icon: ClipboardList },
+  { href: "/research", label: "Research", icon: BookOpenText },
 ]
 
 const routeTitles = new Map([
@@ -26,6 +34,10 @@ const routeTitles = new Map([
   ["/transactions", "Transactions"],
   ["/review", "Review Queue"],
   ["/rules", "Categorization Rules"],
+  ["/portfolio", "Portfolio"],
+  ["/scanner", "Swing Scanner"],
+  ["/trade-journal", "Trade Journal"],
+  ["/research", "Research"],
   ["/admin/invitations", "Invitations"],
 ])
 
