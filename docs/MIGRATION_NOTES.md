@@ -22,7 +22,7 @@ Existing app supports:
 
 ### Phase 1: Foundation
 
-Status: Planned
+Status: In progress
 
 Tasks:
 
@@ -37,7 +37,7 @@ Tasks:
 
 ### Phase 2: Portfolio snapshot
 
-Status: Not started
+Status: Started with read-only foundation
 
 Tasks:
 
@@ -104,3 +104,13 @@ Tasks:
   `apps/web/src/components/layout/app-layout.tsx`.
 - Preserved current expense tracker routes and did not change
   `apps/api/prisma/schema.prisma`.
+- Added the read-only portfolio snapshot foundation:
+  - Prisma models and migration for broker accounts, Dhan holding/position/order/trade/fund snapshots, mutual fund holdings, mutual fund NAVs, and portfolio snapshots.
+  - Dhan read-only client and sync services for holdings, positions, orders, trades, and fund limits.
+  - Portfolio endpoints for `GET /portfolio/snapshot`, `POST /portfolio/sync/dhan`, `GET /portfolio/holdings`, and `GET /portfolio/orders`.
+  - Raw broker API payload storage alongside normalized broker records.
+  - Stock/ETF/cash allocation calculation from synced Dhan holdings and fund limits.
+  - Unit tests for Dhan normalization and allocation math.
+- Dhan sync uses `DHAN_BASE_URL`, `DHAN_CLIENT_ID`, and `DHAN_ACCESS_TOKEN`.
+- No order placement APIs or scanner behavior were added.
+- Expense module behavior was left unchanged.
