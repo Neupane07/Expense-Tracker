@@ -46,7 +46,7 @@ src/
 5. Normalizer converts rows to common transaction format.
 6. Deduplication hash is generated.
 7. New user-owned transactions are saved.
-8. That user's rules are applied.
+8. That user's active rules are applied.
 9. Unmatched transactions go to review.
 10. Dashboard queries that user's categorized transactions.
 
@@ -75,3 +75,9 @@ Rule engine decides:
 - subcategory
 - expenseType
 - confidence
+
+Rule edits and inactive status are forward-looking for imports. Existing
+transactions are not rewritten automatically; the API exposes an explicit apply
+operation for a single active rule. That operation must skip manual
+categorizations and preserve protected automatic categories such as refunds,
+cashback, reversals, income, and credit card payment transfers.

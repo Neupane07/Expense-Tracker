@@ -2,6 +2,14 @@ import { useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -19,11 +27,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { apiGet, apiPostFormData } from "@/lib/api-client"
+import { apiGet, apiPostFormData, apiPostJson } from "@/lib/api-client"
 import { formatDate, formatMoney } from "@/lib/format"
 import { useApiQuery } from "@/lib/use-api-query"
 import type {
   Account,
+  CreateAccountInput,
   ImportDetail,
   ImportPreview,
   ImportRecord,
@@ -49,9 +58,14 @@ export function ImportsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [accountsRefreshKey, setAccountsRefreshKey] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
-  const accountsQuery = useApiQuery<Account[]>("/accounts")
-  const importsQuery = useApiQuery<ImportRecord[]>(`/imports?refresh=${refreshKey}`)
+  const accountsQuery = useApiQuery<Account[]>(
+    `/accounts?refresh=${accountsRefreshKey}`,
+  )
+  const importsQuery = useApiQuery<ImportRecord[]>(
+    `/imports?refresh=${refreshKey}`,
+  )
   const selectedAccount = useMemo(
     () => accountsQuery.data?.find((account) => account.id === accountId),
     [accountsQuery.data, accountId],
@@ -97,7 +111,9 @@ export function ImportsPage() {
         "/imports",
         buildImportFormData(file, accountId, sourceType),
       )
-      const importDetail = await apiGet<ImportDetail>(`/imports/${summary.importId}`)
+      const importDetail = await apiGet<ImportDetail>(
+        `/imports/${summary.importId}`,
+      )
       const reviewRows = importDetail.transactions.filter(
         (transaction) => transaction.category?.expenseType === "REVIEW",
       ).length
@@ -127,71 +143,90 @@ export function ImportsPage() {
           {accountsQuery.error ? (
             <ErrorState message={accountsQuery.error} />
           ) : (
-            <div className="grid gap-4 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
-              <div className="space-y-2">
-                <Label htmlFor="account">Account</Label>
-                <Select
-                  value={accountId}
-                  onValueChange={(value) => {
-                    setAccountId(value)
-                    setPreview(null)
-                    setResult(null)
-                  }}
-                  disabled={accountsQuery.isLoading}
-                >
-                  <SelectTrigger id="account" className="w-full">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(accountsQuery.data ?? []).map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-4">
+              {accountsQuery.data?.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                  No accounts yet. Add your bank account or credit card first,
+                  then preview the statement.
+                </div>
+              ) : null}
+              <div className="grid gap-4 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="account">Account</Label>
+                    <CreateAccountDialog
+                      sourceType={sourceType}
+                      onCreated={(account) => {
+                        setAccountId(account.id)
+                        setAccountsRefreshKey((value) => value + 1)
+                        setPreview(null)
+                        setResult(null)
+                      }}
+                    />
+                  </div>
+                  <Select
+                    value={accountId}
+                    onValueChange={(value) => {
+                      setAccountId(value)
+                      setPreview(null)
+                      setResult(null)
+                    }}
+                    disabled={accountsQuery.isLoading}
+                  >
+                    <SelectTrigger id="account" className="w-full">
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(accountsQuery.data ?? []).map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="sourceType">Source</Label>
-                <Select
-                  value={sourceType}
-                  onValueChange={(value) => {
-                    setSourceType(value)
-                    setPreview(null)
-                    setResult(null)
-                  }}
-                >
-                  <SelectTrigger id="sourceType" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sourceTypes.map((source) => (
-                      <SelectItem key={source.value} value={source.value}>
-                        {source.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sourceType">Source</Label>
+                  <Select
+                    value={sourceType}
+                    onValueChange={(value) => {
+                      setSourceType(value)
+                      setPreview(null)
+                      setResult(null)
+                    }}
+                  >
+                    <SelectTrigger id="sourceType" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sourceTypes.map((source) => (
+                        <SelectItem key={source.value} value={source.value}>
+                          {source.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="statementFile">Statement file</Label>
-                <Input
-                  id="statementFile"
-                  type="file"
-                  accept=".csv,.xls,.xlsx"
-                  onChange={(event) => {
-                    setFile(event.target.files?.[0] ?? null)
-                    setPreview(null)
-                    setResult(null)
-                  }}
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="statementFile">Statement file</Label>
+                  <Input
+                    id="statementFile"
+                    type="file"
+                    accept=".csv,.xls,.xlsx"
+                    onChange={(event) => {
+                      setFile(event.target.files?.[0] ?? null)
+                      setPreview(null)
+                      setResult(null)
+                    }}
+                  />
+                </div>
 
-              <Button onClick={handlePreview} disabled={!canPreview}>
-                {isPreviewing ? "Previewing" : "Preview"}
-              </Button>
+                <Button onClick={handlePreview} disabled={!canPreview}>
+                  {isPreviewing ? "Previewing" : "Preview"}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -219,6 +254,158 @@ export function ImportsPage() {
       <RecentImportsPanel query={importsQuery} />
     </div>
   )
+}
+
+function CreateAccountDialog({
+  sourceType,
+  onCreated,
+}: {
+  sourceType: string
+  onCreated: (account: Account) => void
+}) {
+  const defaults = defaultAccountForSource(sourceType)
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(defaults.name)
+  const [institution, setInstitution] = useState(defaults.institution)
+  const [type, setType] = useState<Account["type"]>(defaults.type)
+  const [lastFour, setLastFour] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+
+  function openWithDefaults() {
+    const nextDefaults = defaultAccountForSource(sourceType)
+    setName(nextDefaults.name)
+    setInstitution(nextDefaults.institution)
+    setType(nextDefaults.type)
+    setLastFour("")
+    setError(null)
+    setOpen(true)
+  }
+
+  async function handleCreateAccount() {
+    setError(null)
+    setIsCreating(true)
+
+    try {
+      const account = await apiPostJson<Account>("/accounts", {
+        name,
+        institution,
+        type,
+        lastFour: lastFour.trim() || null,
+      } satisfies CreateAccountInput)
+
+      onCreated(account)
+      setOpen(false)
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Unable to create account",
+      )
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={openWithDefaults}
+      >
+        Add account
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add account</DialogTitle>
+            <DialogDescription>
+              Create a bank or credit card account to attach imported statements
+              to.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="accountName">Account name</Label>
+              <Input
+                id="accountName"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="ICICI Bank Account"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="institution">Institution</Label>
+              <Input
+                id="institution"
+                value={institution}
+                onChange={(event) => setInstitution(event.target.value)}
+                placeholder="ICICI Bank"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="accountType">Type</Label>
+              <Select
+                value={type}
+                onValueChange={(value) => setType(value as Account["type"])}
+              >
+                <SelectTrigger id="accountType" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BANK_ACCOUNT">Bank account</SelectItem>
+                  <SelectItem value="CREDIT_CARD">Credit card</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="referenceId">Reference ID / last four</Label>
+              <Input
+                id="referenceId"
+                value={lastFour}
+                onChange={(event) => setLastFour(event.target.value)}
+                placeholder="Optional, for your reference"
+              />
+            </div>
+
+            {error ? <ErrorState message={error} /> : null}
+          </div>
+
+          <DialogFooter showCloseButton>
+            <Button
+              type="button"
+              onClick={handleCreateAccount}
+              disabled={!name.trim() || !institution.trim() || isCreating}
+            >
+              {isCreating ? "Creating" : "Create account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function defaultAccountForSource(sourceType: string): CreateAccountInput {
+  if (sourceType === "ICICI_AMAZON_PAY_CARD") {
+    return {
+      name: "ICICI Amazon Pay Credit Card",
+      institution: "ICICI Bank",
+      type: "CREDIT_CARD",
+      lastFour: null,
+    }
+  }
+
+  return {
+    name: "ICICI Bank Account",
+    institution: "ICICI Bank",
+    type: "BANK_ACCOUNT",
+    lastFour: null,
+  }
 }
 
 function PreviewPanel({
@@ -376,8 +563,12 @@ function RecentImportsPanel({
                 <TableCell>
                   <Badge>{item.status}</Badge>
                 </TableCell>
-                <TableCell className="text-right">{item.importedRows}</TableCell>
-                <TableCell className="text-right">{item.duplicateRows}</TableCell>
+                <TableCell className="text-right">
+                  {item.importedRows}
+                </TableCell>
+                <TableCell className="text-right">
+                  {item.duplicateRows}
+                </TableCell>
                 <TableCell>{formatDate(item.createdAt)}</TableCell>
               </TableRow>
             ))}
@@ -401,7 +592,11 @@ function StatsGrid({ stats }: { stats: [string, number][] }) {
   )
 }
 
-function buildImportFormData(file: File, accountId: string, sourceType: string) {
+function buildImportFormData(
+  file: File,
+  accountId: string,
+  sourceType: string,
+) {
   const formData = new FormData()
   formData.set("file", file)
   formData.set("accountId", accountId)

@@ -86,3 +86,19 @@ Create these initial rules:
 - generic `upi|imps|neft|inft` -> Manual Review / REVIEW
 
 Specific rules must have higher priority than generic UPI rules.
+
+## Rule lifecycle and existing transactions
+Active rules are applied automatically during import. Editing a rule or marking
+it inactive affects future imports immediately, but does not rewrite existing
+transactions by itself.
+
+Existing rows are updated only through an explicit apply action:
+- applying a rule updates matching transactions owned by the current user
+- inactive rules cannot be applied
+- manual category edits are skipped
+- card credits, cashback, reversals, and refunds remain REFUND/INCOME instead
+  of being converted into EXPENSE by a matching purchase rule
+
+This keeps historical data stable and avoids surprising changes after a user
+has already reviewed a statement. The UI should explain this before rule edits
+and show how many matching rows were updated when a rule is applied.

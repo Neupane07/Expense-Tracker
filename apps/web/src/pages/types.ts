@@ -6,6 +6,13 @@ export type Account = {
   lastFour: string | null
 }
 
+export type CreateAccountInput = {
+  name: string
+  institution: string
+  type: Account["type"]
+  lastFour?: string | null
+}
+
 export type CurrentUser = {
   id: string
   email: string
@@ -100,9 +107,18 @@ export type CreateRuleInput = {
   expenseType: string
 }
 
+export type UpdateRuleInput = CreateRuleInput & {
+  isActive: boolean
+}
+
 export type RuleApplySummary = {
   ruleId: string
   matchedRows: number
+  updatedRows: number
+}
+
+export type DefaultRulesSummary = {
+  createdRules: number
   updatedRows: number
 }
 

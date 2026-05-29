@@ -95,6 +95,12 @@ Fields:
 - createdAt
 - updatedAt
 
+Important:
+- `isManual = true` means the user reviewed or corrected the category.
+- Rule apply operations must not overwrite manual categories.
+- `ruleId` records the automatic rule that produced the category when one was
+  used.
+
 ### Rule
 User-defined matching rule.
 
@@ -111,6 +117,11 @@ Fields:
 - isActive
 - createdAt
 - updatedAt
+
+Important:
+- inactive rules are ignored by imports
+- inactive rules cannot be applied to existing transactions
+- editing a rule does not automatically rewrite historical categories
 
 ## Deduplication
 Create unique transaction hash from:

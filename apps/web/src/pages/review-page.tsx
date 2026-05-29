@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -42,6 +42,19 @@ const expenseTypes = [
 
 const matchTypes = ["CONTAINS", "EXACT", "STARTS_WITH", "REGEX"]
 
+const categorySuggestions = [
+  "Groceries",
+  "Utilities",
+  "Fuel",
+  "Food Outside",
+  "Shopping",
+  "Investment",
+  "Transfer",
+  "Income",
+  "Refund",
+  "Manual Review",
+]
+
 export function ReviewPage() {
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null)
@@ -58,6 +71,26 @@ export function ReviewPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const { data, error, isLoading } = useApiQuery<Transaction[]>(
     `/transactions?expenseType=REVIEW&refresh=${refreshKey}`,
+  )
+  const rulesQuery = useApiQuery<Rule[]>("/rules")
+  const vendorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (rulesQuery.data ?? []).map((rule) => rule.vendor).filter(Boolean),
+        ),
+      ).sort(),
+    [rulesQuery.data],
+  )
+  const categoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...categorySuggestions,
+          ...(rulesQuery.data ?? []).map((rule) => rule.category),
+        ]),
+      ).sort(),
+    [rulesQuery.data],
   )
 
   function selectTransaction(transaction: Transaction) {
@@ -118,7 +151,9 @@ export function ReviewPage() {
       setLastRule(rule)
       setMessage("Rule created.")
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to create rule")
+      setActionError(
+        error instanceof Error ? error.message : "Unable to create rule",
+      )
     } finally {
       setIsSaving(false)
     }
@@ -141,7 +176,9 @@ export function ReviewPage() {
       setMessage(`Rule applied to ${summary.updatedRows} transactions.`)
       setRefreshKey((value) => value + 1)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to apply rule")
+      setActionError(
+        error instanceof Error ? error.message : "Unable to apply rule",
+      )
     } finally {
       setIsSaving(false)
     }
@@ -165,7 +202,9 @@ export function ReviewPage() {
           {selectedTransaction ? (
             <>
               <div className="rounded-lg border border-border p-3 text-sm">
-                <p className="font-medium">{selectedTransaction.descriptionRaw}</p>
+                <p className="font-medium">
+                  {selectedTransaction.descriptionRaw}
+                </p>
                 <p className="mt-1 text-muted-foreground">
                   {formatDate(selectedTransaction.transactionDate)} ·{" "}
                   {formatMoney(selectedTransaction.moneyOut)}
@@ -173,13 +212,28 @@ export function ReviewPage() {
               </div>
 
               <Field label="Vendor">
-                <Input value={vendor} onChange={(event) => setVendor(event.target.value)} />
+                <Input
+                  value={vendor}
+                  list="vendor-options"
+                  onChange={(event) => setVendor(event.target.value)}
+                />
+                <datalist id="vendor-options">
+                  {vendorOptions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
               </Field>
               <Field label="Category">
                 <Input
                   value={category}
+                  list="category-options"
                   onChange={(event) => setCategory(event.target.value)}
                 />
+                <datalist id="category-options">
+                  {categoryOptions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
               </Field>
               <Field label="Subcategory">
                 <Input
@@ -251,7 +305,9 @@ export function ReviewPage() {
                 </div>
               </div>
 
-              {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+              {message ? (
+                <p className="text-sm text-muted-foreground">{message}</p>
+              ) : null}
               {actionError ? <ErrorState message={actionError} /> : null}
             </>
           ) : (
@@ -322,7 +378,9 @@ function ReviewTransactions({
                 <TableCell className="text-right">
                   <Button
                     size="sm"
-                    variant={selectedId === transaction.id ? "default" : "outline"}
+                    variant={
+                      selectedId === transaction.id ? "default" : "outline"
+                    }
                     onClick={() => onSelect(transaction)}
                   >
                     Select
@@ -337,13 +395,7 @@ function ReviewTransactions({
   )
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>

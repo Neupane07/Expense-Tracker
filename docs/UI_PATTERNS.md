@@ -66,8 +66,8 @@ Route: `/review`
 Show transactions with expenseType = REVIEW.
 
 Actions:
-- set vendor
-- set category
+- set vendor from suggestions or enter a new value
+- set category from suggestions or enter a new value
 - set subcategory
 - set expense type
 - create rule from transaction
@@ -85,6 +85,17 @@ Fields:
 - Subcategory
 - Expense type
 - Active/inactive
+
+Actions:
+- add starter rules when no rules exist
+- add missing starter rules later without duplicating existing patterns
+- edit rule details and active status
+- apply one active rule to existing matching transactions
+
+Rule edit UI must explain that edits and inactive status affect future imports
+immediately, while existing transactions change only through the explicit apply
+action. Applying a rule should report matched and updated row counts and should
+make clear that manual review edits are skipped.
 
 ### Dashboard
 Route: `/dashboard`
