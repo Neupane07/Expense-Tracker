@@ -88,7 +88,34 @@ export type DhanFundLimit = {
 };
 
 export type DhanCredentials = {
+  apiKey: string;
+  apiSecret: string;
   accessToken: string;
-  clientId?: string;
+  clientId: string;
   baseUrl: string;
+};
+
+export type DhanQuoteRow = {
+  last_price?: number;
+  volume?: number;
+  ohlc?: {
+    open?: number;
+    high?: number;
+    low?: number;
+    close?: number;
+  };
+};
+
+export type DhanQuoteResponse = {
+  data?: Record<string, Record<string, DhanQuoteRow>>;
+  status?: string;
+};
+
+export type DhanHistoricalResponse = {
+  open?: number[];
+  high?: number[];
+  low?: number[];
+  close?: number[];
+  volume?: number[];
+  timestamp?: number[];
 };

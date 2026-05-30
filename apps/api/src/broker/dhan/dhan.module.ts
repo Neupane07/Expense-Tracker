@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BrokerCredentialsService } from '../broker-credentials.service';
 import { DhanClient } from './dhan.client';
 import { FundsSyncService } from './funds-sync.service';
 import { HoldingsSyncService } from './holdings-sync.service';
@@ -8,6 +9,7 @@ import { TradesSyncService } from './trades-sync.service';
 
 @Module({
   providers: [
+    BrokerCredentialsService,
     DhanClient,
     HoldingsSyncService,
     PositionsSyncService,
@@ -16,6 +18,7 @@ import { TradesSyncService } from './trades-sync.service';
     FundsSyncService,
   ],
   exports: [
+    BrokerCredentialsService,
     DhanClient,
     HoldingsSyncService,
     PositionsSyncService,

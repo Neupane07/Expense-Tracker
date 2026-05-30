@@ -71,6 +71,8 @@ model User {
   rules                   Rule[]
   sessions                Session[]
   brokerAccounts          BrokerAccount[]
+  brokerConnections       BrokerConnection[]
+  brokerCredentials       BrokerCredential[]
   brokerHoldingSnapshots  BrokerHoldingSnapshot[]
   brokerPositionSnapshots BrokerPositionSnapshot[]
   brokerOrderSnapshots    BrokerOrderSnapshot[]
@@ -241,6 +243,46 @@ model BrokerAccount {
   @@unique([id, userId])
   @@unique([userId, provider, dhanClientId])
   @@index([userId, provider])
+}
+
+model BrokerConnection {
+  id                 String             @id @default(cuid())
+  userId             String
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider           BrokerProvider
+  brokerName         String
+  displayName        String
+  clientIdMasked     String?
+  apiKeyMasked       String?
+  metadata           Json?
+  status             String             @default("DISCONNECTED")
+  lastValidatedAt    DateTime?
+  lastSyncAt         DateTime?
+  accessTokenExpiresAt DateTime?
+  credentials        BrokerCredential[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId, status])
+}
+
+model BrokerCredential {
+  id                 String           @id @default(cuid())
+  userId             String
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brokerConnectionId String
+  brokerConnection   BrokerConnection @relation(fields: [brokerConnectionId], references: [id], onDelete: Cascade)
+  credentialType     String
+  ciphertext         String
+  iv                 String
+  authTag            String
+  keyVersion         String           @default("v1")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([brokerConnectionId, credentialType])
+  @@index([userId, credentialType])
 }
 
 model BrokerHoldingSnapshot {
@@ -465,4 +507,112 @@ model PortfolioSnapshot {
 
   @@index([userId, snapshotTime])
   @@index([brokerAccountId, snapshotTime])
+}
+
+model Instrument {
+  id                  String                       @id @default(cuid())
+  symbol              String
+  exchange            String
+  securityId          String?
+  isin                String?
+  name                String
+  instrumentType      String
+  sector              String?
+  industry            String?
+  isActive            Boolean                      @default(true)
+  source              String
+  lastVerifiedAt      DateTime?
+  priceSnapshots      PriceSnapshot[]
+  dailyCandles        DailyCandle[]
+  indicatorSnapshots  TechnicalIndicatorSnapshot[]
+  dataQualityWarnings DataQualityWarning[]
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  @@unique([symbol, exchange])
+  @@index([securityId, exchange])
+  @@index([isin])
+  @@index([symbol])
+}
+
+model PriceSnapshot {
+  id             String     @id @default(cuid())
+  instrumentId   String
+  instrument     Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  ltp            Decimal    @db.Decimal(14, 4)
+  open           Decimal?   @db.Decimal(14, 4)
+  high           Decimal?   @db.Decimal(14, 4)
+  low            Decimal?   @db.Decimal(14, 4)
+  previousClose  Decimal?   @db.Decimal(14, 4)
+  volume         BigInt?
+  source         String
+  timestamp      DateTime
+  freshness      String
+  dataQuality    Json
+  warnings       String[]
+  rawPayload     Json?
+  createdAt      DateTime   @default(now())
+
+  @@index([instrumentId, timestamp])
+  @@index([source, timestamp])
+}
+
+model DailyCandle {
+  id            String     @id @default(cuid())
+  instrumentId  String
+  instrument    Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  date          DateTime
+  open          Decimal    @db.Decimal(14, 4)
+  high          Decimal    @db.Decimal(14, 4)
+  low           Decimal    @db.Decimal(14, 4)
+  close         Decimal    @db.Decimal(14, 4)
+  volume        BigInt?
+  source        String
+  isAdjusted    Boolean    @default(false)
+  dataQuality   Json?
+  warnings      String[]
+  rawPayload    Json?
+  createdAt     DateTime   @default(now())
+
+  @@unique([instrumentId, date, source])
+  @@index([instrumentId, date])
+}
+
+model TechnicalIndicatorSnapshot {
+  id                String     @id @default(cuid())
+  instrumentId      String
+  instrument        Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  asOfDate          DateTime
+  sma20             Decimal?   @db.Decimal(14, 4)
+  sma50             Decimal?   @db.Decimal(14, 4)
+  sma200            Decimal?   @db.Decimal(14, 4)
+  rsi14             Decimal?   @db.Decimal(8, 4)
+  atr14             Decimal?   @db.Decimal(14, 4)
+  volumeAverage20   Decimal?   @db.Decimal(18, 4)
+  volumeRatio       Decimal?   @db.Decimal(10, 4)
+  distanceFromSma50 Decimal?   @db.Decimal(10, 4)
+  source            String
+  dataQuality       Json
+  warnings          String[]
+  createdAt         DateTime   @default(now())
+
+  @@unique([instrumentId, asOfDate, source])
+  @@index([instrumentId, asOfDate])
+}
+
+model DataQualityWarning {
+  id           String      @id @default(cuid())
+  instrumentId String?
+  instrument   Instrument? @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  scope        String
+  code         String
+  message      String
+  severity     String
+  source       String
+  asOf         DateTime
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+
+  @@index([instrumentId, asOf])
+  @@index([scope, code])
 }

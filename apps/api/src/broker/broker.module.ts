@@ -7,6 +7,6 @@ import { DhanModule } from './dhan/dhan.module';
   imports: [DhanModule],
   controllers: [BrokerController],
   providers: [BrokerService],
-  exports: [BrokerService],
+  exports: [BrokerService, DhanModule],
 })
 export class BrokerModule {}

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { BrokerProvider } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { BrokerCredentialsService } from './broker-credentials.service';
 import { DhanClient } from './dhan/dhan.client';
 import { FundsSyncService } from './dhan/funds-sync.service';
 import { HoldingsSyncService } from './dhan/holdings-sync.service';
@@ -13,6 +14,7 @@ import { TradesSyncService } from './dhan/trades-sync.service';
 export class BrokerService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly brokerCredentials: BrokerCredentialsService,
     private readonly dhanClient: DhanClient,
     private readonly holdingsSync: HoldingsSyncService,
     private readonly positionsSync: PositionsSyncService,
@@ -39,11 +41,11 @@ export class BrokerService {
       tradesResponse,
       fundResponse,
     ] = await Promise.all([
-      this.dhanClient.getHoldings(),
-      this.dhanClient.getPositions(),
-      this.dhanClient.getOrders(),
-      this.dhanClient.getTrades(),
-      this.dhanClient.getFundLimit(),
+      this.dhanClient.getHoldings(userId),
+      this.dhanClient.getPositions(userId),
+      this.dhanClient.getOrders(userId),
+      this.dhanClient.getTrades(userId),
+      this.dhanClient.getFundLimit(userId),
     ]);
 
     const holdings = Array.isArray(holdingsResponse) ? holdingsResponse : [];
@@ -51,7 +53,7 @@ export class BrokerService {
     const orders = Array.isArray(ordersResponse) ? ordersResponse : [];
     const trades = Array.isArray(tradesResponse) ? tradesResponse : [];
     const fund = fundResponse ?? {};
-    const dhanClientId = this.resolveDhanClientId({
+    const dhanClientId = await this.resolveDhanClientId(userId, {
       fund,
       positions,
       orders,
@@ -96,6 +98,7 @@ export class BrokerService {
       this.tradesSync.sync(context, trades),
       this.fundsSync.sync(context, fund),
     ]);
+    await this.brokerCredentials.markDhanSynced(userId);
 
     return {
       syncRunId,
@@ -112,14 +115,22 @@ export class BrokerService {
     };
   }
 
-  private resolveDhanClientId(input: {
-    fund: { dhanClientId?: string };
-    positions: Array<{ dhanClientId?: string }>;
-    orders: Array<{ dhanClientId?: string }>;
-    trades: Array<{ dhanClientId?: string }>;
-  }) {
+  async validateDhan(userId: string) {
+    await this.dhanClient.getFundLimit(userId);
+    return this.brokerCredentials.markDhanValidated(userId);
+  }
+
+  private async resolveDhanClientId(
+    userId: string,
+    input: {
+      fund: { dhanClientId?: string };
+      positions: Array<{ dhanClientId?: string }>;
+      orders: Array<{ dhanClientId?: string }>;
+      trades: Array<{ dhanClientId?: string }>;
+    },
+  ) {
     const clientId =
-      this.dhanClient.getConfiguredClientId() ??
+      (await this.dhanClient.getConfiguredClientId(userId)) ??
       input.fund.dhanClientId ??
       input.positions.find((row) => row.dhanClientId)?.dhanClientId ??
       input.orders.find((row) => row.dhanClientId)?.dhanClientId ??
@@ -127,7 +138,7 @@ export class BrokerService {
 
     if (!clientId) {
       throw new BadRequestException(
-        'DHAN_CLIENT_ID is required when Dhan responses do not include a client id',
+        'Dhan client id is required when Dhan responses do not include a client id',
       );
     }
 
