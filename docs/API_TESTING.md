@@ -11,12 +11,15 @@
 - GET /portfolio/snapshot
 - POST /portfolio/sync/dhan
 - GET /portfolio/holdings
+- GET /portfolio/orders
 
 ## Mutual fund tests
 
 - POST /portfolio/mutual-funds
 - GET /portfolio/mutual-funds
-- POST /portfolio/mutual-funds/nav/sync
+- PATCH /portfolio/mutual-funds/:holdingId
+- DELETE /portfolio/mutual-funds/:holdingId
+- POST /portfolio/sync/amfi-nav
 - GET /portfolio/snapshot
 
 ## Broker connection tests
@@ -114,6 +117,11 @@ curl -i \
 - expense module still works
 - market-data responses include source, asOf/timestamp, dataQuality, and warnings
 - scanner, MCP, and order placement endpoints do not exist
+- portfolio UI loads snapshot, holdings, orders, and data-quality warnings
+- Dhan sync button calls `POST /portfolio/sync/dhan`
+- mutual fund UI calls existing create, update, delete, and AMFI sync APIs
+- market-data lookup renders latest price, source, freshness, warnings, and indicators
+- risk validation UI renders both valid and rejected backend responses
 
 ## Risk tests
 
@@ -169,3 +177,21 @@ Risk checks should show:
 - no scanner output
 - no order placement, modification, or cancellation
 - no broker secrets in any response
+
+## UI smoke tests
+
+With the API and web app running, verify:
+
+- `/dashboard`, `/imports`, `/transactions`, `/review`, and `/rules` still load.
+- `/settings/broker-connections/dhan` still saves, validates, and removes
+  credentials without displaying secrets after save.
+- `/portfolio` loads the Holdings tab and shows empty/loading/error states when
+  synced data is unavailable.
+- Portfolio Holdings Dhan sync uses `POST /portfolio/sync/dhan`.
+- Mutual Funds add/edit/delete and AMFI NAV sync use only existing portfolio APIs.
+- Market Data lookup calls the instrument, latest price, candle, and indicator
+  endpoints, then renders source, timestamp, freshness, warnings, and indicator
+  values when present.
+- Risk validation and position sizing render backend results without generating
+  scanner candidates or placing orders.
+- `/scanner` remains a placeholder stating scanner logic is not implemented yet.

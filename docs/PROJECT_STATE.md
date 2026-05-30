@@ -104,6 +104,22 @@ Expected completed work:
 * Existing expense tracker behavior should remain unchanged.
 * Scanner, MCP, order placement, auto trading, MTF, and F&O remain unimplemented.
 
+### Phase 4.5: Finance OS portfolio, market-data, and risk UI
+
+Status: Completed by Codex
+
+Expected completed work:
+
+* Portfolio placeholder page replaced with a functional read-only Finance OS UI.
+* Portfolio Holdings tab shows snapshot, allocation, cash, warnings, data freshness, synced holdings, and synced orders.
+* Read-only Dhan sync action added via `POST /portfolio/sync/dhan`; broker secrets remain API-only and are not displayed.
+* Mutual Funds tab lists manual holdings, supports add/edit/delete through existing portfolio APIs, triggers AMFI NAV sync, and shows NAV date, value, cost, P&L, and warnings.
+* Market Data tab looks up instruments, latest prices, candles, and indicators through existing market-data APIs and can trigger indicator recalculation.
+* Risk tab validates user-entered BUY/DELIVERY setups, calculates position size, and shows portfolio risk from backend risk APIs.
+* Scanner remains a placeholder and explicitly states scanner logic is not implemented yet.
+* No scanner logic, MCP, order placement, auto trading, MTF/leverage, or F&O behavior was added.
+* Existing expense tracker routes remain unchanged.
+
 ## Existing app status
 
 The Expense module is the first completed module and must remain stable.

@@ -6,13 +6,13 @@ import { AdminInvitationsPage } from "@/pages/admin-invitations-page"
 import { DashboardPage } from "@/pages/dashboard-page"
 import { DhanConnectionPage } from "@/pages/dhan-connection-page"
 import {
-  PortfolioPage,
   ResearchPage,
   SwingScannerPage,
   TradeJournalPage,
 } from "@/pages/finance-placeholder-page"
 import { ImportsPage } from "@/pages/imports-page"
 import { LoadingState } from "@/pages/page-state"
+import { PortfolioPage } from "@/pages/portfolio-page"
 import { ReviewPage } from "@/pages/review-page"
 import { RulesPage } from "@/pages/rules-page"
 import { SignInPage } from "@/pages/sign-in-page"

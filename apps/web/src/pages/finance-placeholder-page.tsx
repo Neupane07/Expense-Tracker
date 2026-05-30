@@ -28,20 +28,11 @@ export function FinancePlaceholderPage({
   )
 }
 
-export function PortfolioPage() {
-  return (
-    <FinancePlaceholderPage
-      title="Portfolio"
-      scope="Portfolio tracking will be added after the expense import flow remains stable."
-    />
-  )
-}
-
 export function SwingScannerPage() {
   return (
     <FinancePlaceholderPage
       title="Swing Scanner"
-      scope="Swing scanning will use verified portfolio, market data, research, and risk inputs in a later phase."
+      scope="Scanner logic is not implemented yet. A later phase will use verified portfolio, market data, research, and risk inputs."
     />
   )
 }

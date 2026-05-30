@@ -167,3 +167,24 @@ Tasks:
   - Risk validation warns on existing holdings, concentration increases, high single-stock concentration, and fallback/unofficial data sources.
   - Unit tests cover valid trade math, rejection paths, sizing by risk/capital, stale data, existing holding warnings, non-DELIVERY products, and missing symbols.
 - Scanner, MCP, order placement, auto trading, MTF, and F&O remain unimplemented.
+
+- Added Phase 4.5 Finance OS frontend UI:
+  - Replaced the Portfolio placeholder with tabbed sections for Holdings,
+    Mutual Funds, Market Data, and Risk.
+  - Holdings shows portfolio snapshot, cash, total value, allocation, warnings,
+    data freshness, latest broker holdings, and latest read-only orders.
+  - Added a read-only Dhan sync action wired to `POST /portfolio/sync/dhan`.
+  - Added manual mutual fund holding add/edit/delete UI using existing
+    `/portfolio/mutual-funds` APIs.
+  - Added AMFI NAV sync action wired to `POST /portfolio/sync/amfi-nav`.
+  - Added market-data symbol lookup wired to instrument, latest price, candle,
+    latest indicator, and indicator recalculation APIs.
+  - Added risk UI for trade validation, position sizing, and portfolio-level
+    risk.
+  - Scanner remains a placeholder and states that scanner logic is not
+    implemented yet.
+  - No scanner logic, MCP, order placement, auto trading, MTF/leverage, or F&O
+    behavior was added.
+  - Existing expense tracker routes and backend business rules were left
+    unchanged.
+  - Verified with `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.

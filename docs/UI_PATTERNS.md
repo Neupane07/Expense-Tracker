@@ -114,6 +114,27 @@ Charts:
 - Source-wise spend
 - Monthly trend
 
+### Portfolio
+Route: `/portfolio`
+
+Use tabs for Finance OS portfolio work:
+
+- Holdings
+- Mutual Funds
+- Market Data
+- Risk
+
+Patterns:
+
+- Keep the screen dense and operational, not marketing-oriented.
+- Use compact metric panels for cash, total value, allocation, and risk outputs.
+- Use tables for holdings, orders, mutual funds, candles, and exposure.
+- Show backend warnings and reject reasons as visible badges or alert rows.
+- Label stale, missing, fallback, or low-confidence data wherever the API
+  returns data-quality metadata.
+- Keep broker actions read-only; never show raw broker secrets.
+- Do not calculate scanner scores or trading decisions in the frontend.
+
 ### Invitations
 Route: `/admin/invitations`
 
