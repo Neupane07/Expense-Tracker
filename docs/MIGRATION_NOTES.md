@@ -71,7 +71,20 @@ Tasks:
 - Add warnings and rejection reasons
 - Keep scanner generation unimplemented
 
-### Phase 5: MCP tools
+### Phase 5: Swing scanner foundation
+
+Status: Completed
+
+Tasks:
+
+- Add deterministic swing scan pipeline and setup detectors.
+- Add scanner endpoints and persisted latest scan results.
+- Wire candidates through shared risk validation.
+- Extend instrument resolution from holdings/orders/trades.
+- Add read-only Swing Scanner UI.
+- Keep order placement disabled.
+
+### Phase 6: MCP tools
 
 Status: Not started
 
@@ -188,3 +201,14 @@ Tasks:
   - Existing expense tracker routes and backend business rules were left
     unchanged.
   - Verified with `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
+- Added Phase 5 swing scanner foundation:
+  - `POST /scanner/swing/run` scans a holdings-derived universe or user-provided symbol list.
+  - `GET /scanner/swing/candidates` returns the latest persisted scan with data-quality metadata.
+  - Setup detectors added for `BREAKOUT`, `PULLBACK_TO_SUPPORT`, and `RSI_REVERSAL`.
+  - Candidates are validated through the existing trade validation service (no duplicated risk math).
+  - Instrument lookup now also maps symbols from synced Dhan orders/trades when `securityId` is present.
+  - `SwingScanRun` table stores latest scan output per user.
+  - Read-only `/scanner` UI added with run action, results table, and candidate detail panel.
+  - Scanner remains research-only; no order placement, modification, cancellation, MCP, MTF, or F&O behavior was added.
+  - Existing expense tracker routes and backend business rules were left unchanged.

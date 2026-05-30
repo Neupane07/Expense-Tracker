@@ -21,6 +21,12 @@ import { PricesService } from './prices.service';
     MarketDataQualityService,
     DhanMarketDataProviderService,
   ],
-  exports: [InstrumentsService, PricesService, MarketDataQualityService],
+  exports: [
+    InstrumentsService,
+    PricesService,
+    CandlesService,
+    IndicatorsService,
+    MarketDataQualityService,
+  ],
 })
 export class MarketDataModule {}

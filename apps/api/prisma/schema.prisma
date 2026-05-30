@@ -81,6 +81,7 @@ model User {
   mutualFundHoldings      MutualFundHolding[]
   mutualFundNavs          MutualFundNav[]
   portfolioSnapshots      PortfolioSnapshot[]
+  swingScanRuns           SwingScanRun[]
   invitationsCreated      Invitation[]             @relation("InvitationCreator")
   invitationAccepted      Invitation?              @relation("InvitationAccepted")
   createdAt               DateTime                 @default(now())
@@ -615,4 +616,19 @@ model DataQualityWarning {
 
   @@index([instrumentId, asOf])
   @@index([scope, code])
+}
+
+model SwingScanRun {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  runAt           DateTime @default(now())
+  universeSource  String
+  universe        String[]
+  candidateCount  Int
+  candidates      Json
+  warnings        String[]
+  createdAt       DateTime @default(now())
+
+  @@index([userId, runAt])
 }

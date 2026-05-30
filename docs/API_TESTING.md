@@ -116,7 +116,8 @@ curl -i \
 - values calculated correctly
 - expense module still works
 - market-data responses include source, asOf/timestamp, dataQuality, and warnings
-- scanner, MCP, and order placement endpoints do not exist
+- scanner endpoints are read-only research tools and do not place orders
+- MCP and order placement endpoints do not exist
 - portfolio UI loads snapshot, holdings, orders, and data-quality warnings
 - Dhan sync button calls `POST /portfolio/sync/dhan`
 - mutual fund UI calls existing create, update, delete, and AMFI sync APIs
@@ -194,4 +195,43 @@ With the API and web app running, verify:
   values when present.
 - Risk validation and position sizing render backend results without generating
   scanner candidates or placing orders.
-- `/scanner` remains a placeholder stating scanner logic is not implemented yet.
+- `/scanner` runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, and shows research-only disclaimer text.
+
+## Scanner tests
+
+Run a swing scan on synced holdings (default universe):
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/scanner/swing/run \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Run a swing scan on explicit symbols:
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/scanner/swing/run \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{"symbols":["INFY","TCS"],"universe":"symbols"}'
+```
+
+Fetch the latest scan results:
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  http://localhost:4000/scanner/swing/candidates
+```
+
+Scanner checks should show:
+
+- `researchDisclaimer` on every response
+- candidate `rejectReasons`, `warnings`, `dataQuality`, and `confidenceCapReason` when applicable
+- `status` of `candidate`, `watchlist`, or `rejected`
+- shared risk validation rejections such as `PRICE_STALE`, `RISK_REWARD_BELOW_MINIMUM`, and `SYMBOL_NOT_VERIFIED`
+- no order placement, modification, or cancellation endpoints
+- no broker secrets in any response

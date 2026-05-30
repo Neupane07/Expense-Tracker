@@ -10,7 +10,7 @@ type PriceQuality = {
   confidence?: string;
 };
 
-type LatestPriceResponse = {
+export type LatestPriceResponse = {
   instrument?: {
     symbol?: string;
     isActive?: boolean;
@@ -32,6 +32,10 @@ type LatestPriceResponse = {
   timestamp?: Date | string | null;
   dataQuality?: PriceQuality;
   warnings?: string[];
+};
+
+export type ValidateTradeOptions = {
+  marketData?: LatestPriceResponse | null;
 };
 
 export type TradeValidationResult = {
@@ -78,6 +82,7 @@ export class TradeValidationService {
   async validateTrade(
     userId: string,
     input: ValidateTradeInput,
+    options?: ValidateTradeOptions,
   ): Promise<TradeValidationResult> {
     const symbol = input.symbol.trim().toUpperCase();
     const side = input.side.trim().toUpperCase();
@@ -86,7 +91,10 @@ export class TradeValidationService {
     const warnings: string[] = [];
     const rejectReasons: string[] = [];
     const portfolio = await this.exposureService.getPortfolioRisk(userId);
-    const marketData = await this.loadMarketData(userId, symbol, rejectReasons);
+    const marketData: LatestPriceResponse | null =
+      options?.marketData !== undefined
+        ? options.marketData
+        : await this.loadMarketData(userId, symbol, rejectReasons);
     const quantity = this.resolveQuantity(input, portfolio);
     const riskPerShare = roundPrice(input.entry - input.stopLoss);
     const rewardPerShare = roundPrice(input.target - input.entry);

@@ -7,9 +7,9 @@ import { DashboardPage } from "@/pages/dashboard-page"
 import { DhanConnectionPage } from "@/pages/dhan-connection-page"
 import {
   ResearchPage,
-  SwingScannerPage,
   TradeJournalPage,
 } from "@/pages/finance-placeholder-page"
+import { SwingScannerPage } from "@/pages/scanner-page"
 import { ImportsPage } from "@/pages/imports-page"
 import { LoadingState } from "@/pages/page-state"
 import { PortfolioPage } from "@/pages/portfolio-page"

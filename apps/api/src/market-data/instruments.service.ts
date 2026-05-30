@@ -19,6 +19,28 @@ export class InstrumentsService {
       return existing;
     }
 
+    const holdingMapping = await this.findHoldingMapping(
+      userId,
+      normalizedSymbol,
+    );
+    if (holdingMapping) {
+      return this.upsertFromBrokerMapping(normalizedSymbol, holdingMapping);
+    }
+
+    const brokerMapping = await this.findBrokerRecordMapping(
+      userId,
+      normalizedSymbol,
+    );
+    if (brokerMapping) {
+      return this.upsertFromBrokerMapping(normalizedSymbol, brokerMapping);
+    }
+
+    throw new NotFoundException(
+      `Instrument ${normalizedSymbol} is not mapped yet.`,
+    );
+  }
+
+  private async findHoldingMapping(userId: string, normalizedSymbol: string) {
     const latestHolding = await this.prisma.brokerHoldingSnapshot.findFirst({
       where: {
         userId,
@@ -30,35 +52,107 @@ export class InstrumentsService {
       orderBy: { asOf: 'desc' },
     });
 
-    if (!latestHolding) {
-      throw new NotFoundException(
-        `Instrument ${normalizedSymbol} is not mapped yet.`,
-      );
+    if (!latestHolding?.securityId) {
+      return null;
     }
 
+    return {
+      exchange: latestHolding.exchange ?? 'NSE',
+      securityId: latestHolding.securityId,
+      isin: latestHolding.isin,
+      instrumentType: latestHolding.assetClass === 'ETF' ? 'ETF' : 'EQUITY',
+      source: 'DHAN_HOLDINGS',
+      lastVerifiedAt: latestHolding.asOf,
+    };
+  }
+
+  private async findBrokerRecordMapping(
+    userId: string,
+    normalizedSymbol: string,
+  ) {
+    const order = await this.prisma.brokerOrderSnapshot.findFirst({
+      where: {
+        userId,
+        tradingSymbol: {
+          equals: normalizedSymbol,
+          mode: 'insensitive',
+        },
+        securityId: { not: null },
+      },
+      orderBy: { asOf: 'desc' },
+    });
+
+    if (order?.securityId) {
+      return {
+        exchange: exchangeFromSegment(order.exchangeSegment),
+        securityId: order.securityId,
+        isin: null,
+        instrumentType: 'EQUITY',
+        source: 'DHAN_ORDERS',
+        lastVerifiedAt: order.asOf,
+      };
+    }
+
+    const trade = await this.prisma.brokerTradeSnapshot.findFirst({
+      where: {
+        userId,
+        tradingSymbol: {
+          equals: normalizedSymbol,
+          mode: 'insensitive',
+        },
+        securityId: { not: null },
+      },
+      orderBy: { asOf: 'desc' },
+    });
+
+    if (!trade?.securityId) {
+      return null;
+    }
+
+    return {
+      exchange: exchangeFromSegment(trade.exchangeSegment),
+      securityId: trade.securityId,
+      isin: null,
+      instrumentType: 'EQUITY',
+      source: 'DHAN_TRADES',
+      lastVerifiedAt: trade.asOf,
+    };
+  }
+
+  private upsertFromBrokerMapping(
+    normalizedSymbol: string,
+    mapping: {
+      exchange: string;
+      securityId: string;
+      isin: string | null;
+      instrumentType: string;
+      source: string;
+      lastVerifiedAt: Date;
+    },
+  ) {
     return this.prisma.instrument.upsert({
       where: {
         symbol_exchange: {
           symbol: normalizedSymbol,
-          exchange: latestHolding.exchange ?? 'NSE',
+          exchange: mapping.exchange,
         },
       },
       create: {
         symbol: normalizedSymbol,
-        exchange: latestHolding.exchange ?? 'NSE',
-        securityId: latestHolding.securityId,
-        isin: latestHolding.isin,
+        exchange: mapping.exchange,
+        securityId: mapping.securityId,
+        isin: mapping.isin,
         name: normalizedSymbol,
-        instrumentType: latestHolding.assetClass === 'ETF' ? 'ETF' : 'EQUITY',
-        source: 'DHAN_HOLDINGS',
-        lastVerifiedAt: latestHolding.asOf,
+        instrumentType: mapping.instrumentType,
+        source: mapping.source,
+        lastVerifiedAt: mapping.lastVerifiedAt,
       },
       update: {
-        securityId: latestHolding.securityId,
-        isin: latestHolding.isin,
-        instrumentType: latestHolding.assetClass === 'ETF' ? 'ETF' : 'EQUITY',
-        source: 'DHAN_HOLDINGS',
-        lastVerifiedAt: latestHolding.asOf,
+        securityId: mapping.securityId,
+        isin: mapping.isin,
+        instrumentType: mapping.instrumentType,
+        source: mapping.source,
+        lastVerifiedAt: mapping.lastVerifiedAt,
         isActive: true,
       },
     });
@@ -105,4 +199,14 @@ export class InstrumentsService {
   private normalizeSymbol(symbol: string) {
     return symbol.trim().toUpperCase();
   }
+}
+
+function exchangeFromSegment(segment: string | null | undefined) {
+  const normalized = segment?.toUpperCase() ?? '';
+
+  if (normalized.includes('BSE')) {
+    return 'BSE';
+  }
+
+  return 'NSE';
 }

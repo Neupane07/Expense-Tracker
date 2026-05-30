@@ -28,15 +28,6 @@ export function FinancePlaceholderPage({
   )
 }
 
-export function SwingScannerPage() {
-  return (
-    <FinancePlaceholderPage
-      title="Swing Scanner"
-      scope="Scanner logic is not implemented yet. A later phase will use verified portfolio, market data, research, and risk inputs."
-    />
-  )
-}
-
 export function TradeJournalPage() {
   return (
     <FinancePlaceholderPage

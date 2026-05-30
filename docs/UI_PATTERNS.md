@@ -135,6 +135,18 @@ Patterns:
 - Keep broker actions read-only; never show raw broker secrets.
 - Do not calculate scanner scores or trading decisions in the frontend.
 
+### Swing Scanner
+Route: `/scanner`
+
+Patterns:
+
+- Show the research-only disclaimer prominently: verify and place manually in Dhan.
+- Provide a run-scan action wired to `POST /scanner/swing/run`.
+- Load latest results from `GET /scanner/swing/candidates`.
+- Use a table for candidates and a side/detail panel for entry, target, stop loss, R:R, quantity, confidence, reject reasons, and data-quality badges.
+- Render backend `status`, `rejectReasons`, `warnings`, and `dataQuality` without recomputing scores client-side.
+- Do not generate orders, broker actions, or auto-trading controls.
+
 ### Invitations
 Route: `/admin/invitations`
 

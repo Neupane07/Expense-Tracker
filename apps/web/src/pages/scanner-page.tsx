@@ -1,0 +1,414 @@
+import { type FormEvent, useMemo, useState } from "react"
+import { Play, ScanSearch } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { apiPostJson } from "@/lib/api-client"
+import { formatDateTime, formatMoney, formatNumber } from "@/lib/format"
+import { useApiQuery } from "@/lib/use-api-query"
+import { EmptyState, ErrorState, LoadingState } from "./page-state"
+
+type SwingCandidate = {
+  symbol: string
+  name: string
+  setupType: string
+  entryZone: { low: number; high: number }
+  entry: number
+  target: number
+  stopLoss: number
+  riskReward: number
+  suggestedQuantity: number
+  capitalRequired: number
+  maxRiskAmount: number
+  targetProfitAmount: number
+  confidenceScore: number
+  confidenceCapReason: string | null
+  technicalSummary: string
+  portfolioFit: {
+    alreadyHeld: boolean
+    exposureBeforePct: number
+    exposureAfterPct: number
+    warnings: string[]
+  }
+  rejectReasons: string[]
+  warnings: string[]
+  dataQuality: {
+    priceSource: string | null
+    priceTimestamp: string | null
+    technicalSource: string | null
+    freshness: string
+    confidence: string
+    warnings: string[]
+  }
+  status: "candidate" | "rejected" | "watchlist"
+  researchDisclaimer: string
+}
+
+type SwingScanRunResponse = {
+  runId: string
+  runAt: string
+  universeSource: string
+  universe: string[]
+  candidateCount: number
+  candidates: SwingCandidate[]
+  warnings: string[]
+  researchDisclaimer: string
+}
+
+type SwingCandidatesResponse = {
+  run: {
+    id: string
+    runAt: string
+    universeSource: string
+    universe: string[]
+    candidateCount: number
+    warnings: string[]
+  } | null
+  candidates: SwingCandidate[]
+  researchDisclaimer: string
+}
+
+function statusVariant(status: SwingCandidate["status"]) {
+  if (status === "candidate") {
+    return "default" as const
+  }
+
+  if (status === "watchlist") {
+    return "secondary" as const
+  }
+
+  return "destructive" as const
+}
+
+function freshnessVariant(freshness: string) {
+  if (freshness === "LIVE") {
+    return "default" as const
+  }
+
+  if (freshness === "RECENT") {
+    return "secondary" as const
+  }
+
+  return "outline" as const
+}
+
+export function SwingScannerPage() {
+  const [symbolInput, setSymbolInput] = useState("")
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const [isRunning, setIsRunning] = useState(false)
+  const [lastRun, setLastRun] = useState<SwingScanRunResponse | null>(null)
+
+  const candidatesQuery = useApiQuery<SwingCandidatesResponse>(
+    "/scanner/swing/candidates",
+  )
+
+  const candidates = useMemo(
+    () => lastRun?.candidates ?? candidatesQuery.data?.candidates ?? [],
+    [lastRun?.candidates, candidatesQuery.data?.candidates],
+  )
+  const runMeta = lastRun
+    ? {
+        runAt: lastRun.runAt,
+        universeSource: lastRun.universeSource,
+        universe: lastRun.universe,
+        warnings: lastRun.warnings,
+      }
+    : candidatesQuery.data?.run
+
+  const selectedCandidate = useMemo(() => {
+    if (selectedKey) {
+      const [symbol, setupType] = selectedKey.split("::")
+      const match = candidates.find(
+        (candidate) =>
+          candidate.symbol === symbol && candidate.setupType === setupType,
+      )
+      if (match) {
+        return match
+      }
+    }
+
+    return candidates[0] ?? null
+  }, [candidates, selectedKey])
+
+  async function runScan(event: FormEvent) {
+    event.preventDefault()
+    setScanError(null)
+    setIsRunning(true)
+
+    try {
+      const symbols = symbolInput
+        .split(/[,\s]+/)
+        .map((value) => value.trim().toUpperCase())
+        .filter(Boolean)
+      const payload =
+        symbols.length > 0 ? { symbols, universe: "symbols" as const } : {}
+
+      const result = await apiPostJson<SwingScanRunResponse>(
+        "/scanner/swing/run",
+        payload,
+      )
+      setLastRun(result)
+      if (result.candidates[0]) {
+        setSelectedKey(
+          `${result.candidates[0].symbol}::${result.candidates[0].setupType}`,
+        )
+      }
+    } catch (error) {
+      setScanError(
+        error instanceof Error ? error.message : "Swing scan failed.",
+      )
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  const disclaimer =
+    lastRun?.researchDisclaimer ??
+    candidatesQuery.data?.researchDisclaimer ??
+    "Research only — verify and place manually in Dhan."
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="space-y-2">
+          <div className="flex items-center gap-2">
+            <ScanSearch className="size-5 text-muted-foreground" />
+            <CardTitle>Swing Scanner</CardTitle>
+          </div>
+          <CardDescription>
+            Research-only swing setup scan using verified market data, portfolio
+            exposure, and deterministic risk rules. Results are not orders.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+            {disclaimer}
+          </p>
+
+          <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runScan}>
+            <div className="space-y-2">
+              <Label htmlFor="scan-symbols">
+                Symbols (optional, comma-separated)
+              </Label>
+              <Input
+                id="scan-symbols"
+                placeholder="Leave empty to scan synced holdings"
+                value={symbolInput}
+                onChange={(event) => setSymbolInput(event.target.value)}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button type="submit" disabled={isRunning}>
+                <Play className="mr-2 size-4" />
+                {isRunning ? "Running scan…" : "Run scan"}
+              </Button>
+            </div>
+          </form>
+
+          {scanError ? <ErrorState message={scanError} /> : null}
+          {runMeta ? (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span>Last run: {formatDateTime(runMeta.runAt)}</span>
+              <span>Universe: {runMeta.universeSource}</span>
+              <span>{runMeta.universe.length} symbols</span>
+              {runMeta.warnings.map((warning) => (
+                <Badge key={warning} variant="outline">
+                  {warning}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Scan results</CardTitle>
+            <CardDescription>
+              Backend-generated candidates with reject reasons and data-quality
+              metadata.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {candidatesQuery.isLoading && !lastRun ? (
+              <LoadingState message="Loading latest scan" />
+            ) : null}
+            {candidatesQuery.error && !lastRun ? (
+              <ErrorState message={candidatesQuery.error} />
+            ) : null}
+            {!candidatesQuery.isLoading && candidates.length === 0 ? (
+              <EmptyState message="No scan results yet. Run a scan on synced holdings or enter symbols to research setups." />
+            ) : null}
+            {candidates.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Symbol</TableHead>
+                    <TableHead>Setup</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>R:R</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Confidence</TableHead>
+                    <TableHead>Data</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {candidates.map((candidate) => (
+                    <TableRow
+                      key={`${candidate.symbol}-${candidate.setupType}`}
+                      className={
+                        selectedCandidate?.symbol === candidate.symbol &&
+                        selectedCandidate?.setupType === candidate.setupType
+                          ? "bg-muted/50 cursor-pointer"
+                          : "cursor-pointer"
+                      }
+                      onClick={() =>
+                        setSelectedKey(`${candidate.symbol}::${candidate.setupType}`)
+                      }
+                    >
+                      <TableCell className="font-medium">
+                        {candidate.symbol}
+                        <div className="text-xs text-muted-foreground">
+                          {candidate.name}
+                        </div>
+                      </TableCell>
+                      <TableCell>{candidate.setupType}</TableCell>
+                      <TableCell>
+                        <Badge variant={statusVariant(candidate.status)}>
+                          {candidate.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatNumber(candidate.riskReward)}</TableCell>
+                      <TableCell>{candidate.suggestedQuantity}</TableCell>
+                      <TableCell>{formatNumber(candidate.confidenceScore)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={freshnessVariant(candidate.dataQuality.freshness)}
+                        >
+                          {candidate.dataQuality.freshness}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Candidate detail</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {!selectedCandidate ? (
+              <p className="text-muted-foreground">Select a row to inspect.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <Badge>{selectedCandidate.setupType}</Badge>
+                  <Badge variant={statusVariant(selectedCandidate.status)}>
+                    {selectedCandidate.status}
+                  </Badge>
+                  {selectedCandidate.confidenceCapReason ? (
+                    <Badge variant="outline">
+                      cap: {selectedCandidate.confidenceCapReason}
+                    </Badge>
+                  ) : null}
+                </div>
+                <p>{selectedCandidate.technicalSummary}</p>
+                <dl className="grid grid-cols-2 gap-2">
+                  <div>
+                    <dt className="text-muted-foreground">Entry zone</dt>
+                    <dd>
+                      {formatMoney(selectedCandidate.entryZone.low)} –{" "}
+                      {formatMoney(selectedCandidate.entryZone.high)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Entry</dt>
+                    <dd>{formatMoney(selectedCandidate.entry)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Target</dt>
+                    <dd>{formatMoney(selectedCandidate.target)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Stop loss</dt>
+                    <dd>{formatMoney(selectedCandidate.stopLoss)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Capital</dt>
+                    <dd>{formatMoney(selectedCandidate.capitalRequired)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Max risk</dt>
+                    <dd>{formatMoney(selectedCandidate.maxRiskAmount)}</dd>
+                  </div>
+                </dl>
+                {selectedCandidate.rejectReasons.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="font-medium text-destructive">Reject reasons</p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedCandidate.rejectReasons.map((reason) => (
+                        <Badge key={reason} variant="destructive">
+                          {reason}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {selectedCandidate.warnings.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="font-medium">Warnings</p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedCandidate.warnings.map((warning) => (
+                        <Badge key={warning} variant="outline">
+                          {warning}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="space-y-1">
+                  <p className="font-medium">Data quality</p>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant={freshnessVariant(selectedCandidate.dataQuality.freshness)}>
+                      {selectedCandidate.dataQuality.freshness}
+                    </Badge>
+                    <Badge variant="outline">
+                      {selectedCandidate.dataQuality.confidence}
+                    </Badge>
+                    {selectedCandidate.dataQuality.priceSource ? (
+                      <Badge variant="outline">
+                        {selectedCandidate.dataQuality.priceSource}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}

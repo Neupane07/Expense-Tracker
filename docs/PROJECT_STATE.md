@@ -104,6 +104,24 @@ Expected completed work:
 * Existing expense tracker behavior should remain unchanged.
 * Scanner, MCP, order placement, auto trading, MTF, and F&O remain unimplemented.
 
+### Phase 5: Swing scanner foundation
+
+Status: Completed by Codex
+
+Expected completed work:
+
+* Deterministic swing scan pipeline added using verified instruments, prices, candles, indicators, and portfolio/risk inputs.
+* Initial setup types implemented: `BREAKOUT`, `PULLBACK_TO_SUPPORT`, `RSI_REVERSAL`.
+* Hard rejects and confidence caps applied per `docs/SWING_SCANNER_MODULE.md` and `docs/RISK_RULES.md`.
+* Each candidate includes entry/target/stop loss, risk/reward, suggested quantity, capital required, warnings, reject reasons, and data-quality metadata.
+* Scanner endpoints added: `POST /scanner/swing/run` and `GET /scanner/swing/candidates`.
+* Each candidate is validated through shared `POST /risk/validate-trade` logic (no duplicated risk math).
+* Instrument lookup extended to holdings, orders, and trades mappings; uncertain symbols are rejected without guessing `securityId`.
+* Read-only Swing Scanner UI added at `/scanner` with run action, results table, and candidate detail panel.
+* Tests added for reject paths, confidence caps, stale/missing data, low risk/reward, portfolio-fit warnings, and no order placement behavior.
+* Existing expense tracker behavior remains unchanged.
+* MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
+
 ### Phase 4.5: Finance OS portfolio, market-data, and risk UI
 
 Status: Completed by Codex
@@ -151,19 +169,18 @@ Can access new placeholder Finance OS pages
 
 ## Current priority
 
-Move from deterministic risk validation to the next safe foundation phase.
+Move from swing scanner foundation to the next safe foundation phase.
 
 Next phase:
 
 ```text
-Swing scanner foundation
+Trade journal foundation
 ```
 
 Next phase goal:
 
-* Use verified market data and deterministic risk rules as scanner inputs.
-* Keep portfolio and expense behavior stable.
-* Keep existing expense tracker behavior unchanged.
+* Capture manual trade plans and post-trade reviews.
+* Keep portfolio, scanner, and expense behavior stable.
 * Do not implement MCP yet.
 * Do not implement order execution.
 

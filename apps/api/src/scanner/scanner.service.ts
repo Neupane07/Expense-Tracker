@@ -5,7 +5,9 @@ export class ScannerService {
   getStatus() {
     return {
       module: 'scanner',
-      status: 'placeholder',
+      status: 'swing-foundation',
+      automation: 'disabled',
+      orderPlacement: false,
     };
   }
 }
