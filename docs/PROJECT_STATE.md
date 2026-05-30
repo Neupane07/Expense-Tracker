@@ -70,6 +70,40 @@ Expected completed work:
 * Existing expense tracker behavior should remain unchanged.
 * Scanner, MCP, and order execution remain unimplemented.
 
+### Phase 3: Market data foundation and secure Dhan credentials
+
+Status: Completed by Codex
+
+Expected completed work:
+
+* Dhan broker credentials are stored in DB encrypted at rest with AES-256-GCM.
+* `FINANCE_OS_CREDENTIAL_KEY` is required for broker credential operations in non-test environments.
+* Dhan API key, API secret, client ID, and access token are never returned to the frontend.
+* Settings -> Broker Connections -> Dhan UI added for save, validate, and remove actions.
+* Existing Dhan portfolio sync now uses saved encrypted credentials rather than `DHAN_CLIENT_ID` or `DHAN_ACCESS_TOKEN`.
+* Instrument, price snapshot, daily candle, indicator snapshot, and data-quality warning tables added.
+* Market-data services and endpoints added for instruments, latest prices, candles, and technical indicators.
+* Dhan market-data provider added for read-only quote and historical candle data.
+* Tests added for encryption, redaction, missing key failure, indicator calculations, stale prices, and missing candles.
+* Existing expense tracker behavior should remain unchanged.
+* Scanner, MCP, and order placement remain unimplemented.
+
+### Phase 4: Deterministic risk engine
+
+Status: Completed by Codex
+
+Expected completed work:
+
+* Configurable safe-default risk settings added.
+* Position sizing service added for cash, capital-limit, and risk-limit based quantity calculation.
+* Trade validation service added for user-provided BUY/DELIVERY trade setups only.
+* Portfolio risk endpoint added with portfolio value, cash, active swing capital approximation, concentration, allocation, sector/theme exposure, and warnings.
+* Trade validation rejects unknown symbols, stale/missing market data, invalid entry/target/stop loss, low risk/reward, invalid quantity, insufficient cash, non-DELIVERY products, MTF, and F&O.
+* Trade validation warns for existing holdings, increased concentration, high single-stock concentration, and fallback/unofficial data sources.
+* Tests added for deterministic risk calculations and rejection/warning paths.
+* Existing expense tracker behavior should remain unchanged.
+* Scanner, MCP, order placement, auto trading, MTF, and F&O remain unimplemented.
+
 ## Existing app status
 
 The Expense module is the first completed module and must remain stable.
@@ -101,21 +135,19 @@ Can access new placeholder Finance OS pages
 
 ## Current priority
 
-Move from Phase 2 to the next safe foundation phase.
+Move from deterministic risk validation to the next safe foundation phase.
 
 Next phase:
 
 ```text
-Phase 3: Market data foundation
+Swing scanner foundation
 ```
 
-Phase 3 goal:
+Next phase goal:
 
-* Add instrument and market-data foundations.
-* Add price/candle storage with freshness metadata.
+* Use verified market data and deterministic risk rules as scanner inputs.
 * Keep portfolio and expense behavior stable.
 * Keep existing expense tracker behavior unchanged.
-* Do not implement scanner yet.
 * Do not implement MCP yet.
 * Do not implement order execution.
 

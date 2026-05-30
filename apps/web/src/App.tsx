@@ -4,6 +4,7 @@ import { useAuth } from "@/auth/use-auth"
 import { AppLayout } from "@/components/layout/app-layout"
 import { AdminInvitationsPage } from "@/pages/admin-invitations-page"
 import { DashboardPage } from "@/pages/dashboard-page"
+import { DhanConnectionPage } from "@/pages/dhan-connection-page"
 import {
   PortfolioPage,
   ResearchPage,
@@ -58,6 +59,10 @@ function AppRoutes() {
         <Route path="/scanner" element={<SwingScannerPage />} />
         <Route path="/trade-journal" element={<TradeJournalPage />} />
         <Route path="/research" element={<ResearchPage />} />
+        <Route
+          path="/settings/broker-connections/dhan"
+          element={<DhanConnectionPage />}
+        />
         {user.role === "ADMIN" ? (
           <Route path="/admin/invitations" element={<AdminInvitationsPage />} />
         ) : null}

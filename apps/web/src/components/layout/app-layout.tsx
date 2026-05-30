@@ -8,6 +8,7 @@ import {
   ReceiptText,
   Route,
   ScanSearch,
+  Settings,
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react"
@@ -26,6 +27,11 @@ const navigation = [
   { href: "/scanner", label: "Swing Scanner", icon: ScanSearch },
   { href: "/trade-journal", label: "Trade Journal", icon: ClipboardList },
   { href: "/research", label: "Research", icon: BookOpenText },
+  {
+    href: "/settings/broker-connections/dhan",
+    label: "Settings",
+    icon: Settings,
+  },
 ]
 
 const routeTitles = new Map([
@@ -38,6 +44,7 @@ const routeTitles = new Map([
   ["/scanner", "Swing Scanner"],
   ["/trade-journal", "Trade Journal"],
   ["/research", "Research"],
+  ["/settings/broker-connections/dhan", "Broker Connections"],
   ["/admin/invitations", "Invitations"],
 ])
 

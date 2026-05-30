@@ -160,14 +160,23 @@ Suggested caps:
 
 ## API Direction
 
-Possible endpoints:
+Phase 3 endpoints:
 
 - `GET /market-data/instruments/:symbol`
-- `GET /market-data/prices/:symbol`
+- `GET /market-data/prices/:symbol/latest`
 - `GET /market-data/candles/:symbol`
-- `GET /market-data/indicators/:symbol`
-- `GET /market-data/sectors`
-- `GET /market-data/regime`
-- `POST /market-data/sync`
+- `GET /market-data/indicators/:symbol/latest`
+- `POST /market-data/indicators/recalculate/:symbol`
 
 All endpoints require authenticated session unless explicitly made internal-only.
+
+Every response must include:
+
+- `source`
+- `asOf` or `timestamp`
+- `dataQuality`
+- `warnings`
+
+Phase 3 Dhan integration uses encrypted credentials from broker connection
+storage. It must not read `DHAN_CLIENT_ID` or `DHAN_ACCESS_TOKEN` directly from
+environment variables.
