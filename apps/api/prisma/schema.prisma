@@ -455,6 +455,7 @@ model PortfolioSnapshot {
   snapshotTime    DateTime       @default(now())
   totalStockValue Decimal        @db.Decimal(18, 2)
   totalEtfValue   Decimal        @db.Decimal(18, 2)
+  totalMfValue    Decimal        @default(0) @db.Decimal(18, 2)
   totalCashValue  Decimal        @db.Decimal(18, 2)
   totalValue      Decimal        @db.Decimal(18, 2)
   allocation      Json

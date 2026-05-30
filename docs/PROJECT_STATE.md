@@ -54,6 +54,22 @@ Expected completed work:
 * Tests added for normalization/allocation logic where applicable.
 * Existing expense tracker behavior should remain unchanged.
 
+### Phase 2: Mutual fund support and AMFI NAV valuation
+
+Status: Completed by Codex
+
+Expected completed work:
+
+* Manual mutual fund holding CRUD added under the portfolio API.
+* AMFI NAV sync support added using `AMFI_NAV_URL`, defaulting to AMFI `NAVAll.txt`.
+* Mutual fund holdings match to AMFI schemes by normalized scheme name.
+* Manual `schemeCode` override is supported and takes precedence over name matching.
+* Mutual fund valuation is included in portfolio snapshots.
+* NAV date and stale NAV warnings are returned in portfolio snapshot data-quality warnings.
+* Tests added for AMFI NAV matching, valuation math, stale NAV warnings, and allocation math.
+* Existing expense tracker behavior should remain unchanged.
+* Scanner, MCP, and order execution remain unimplemented.
+
 ## Existing app status
 
 The Expense module is the first completed module and must remain stable.
@@ -85,21 +101,19 @@ Can access new placeholder Finance OS pages
 
 ## Current priority
 
-Move from Phase 1 to Phase 2.
+Move from Phase 2 to the next safe foundation phase.
 
 Next phase:
 
 ```text
-Phase 2: Mutual fund support and AMFI NAV valuation
+Phase 3: Market data foundation
 ```
 
-Phase 2 goal:
+Phase 3 goal:
 
-* Add manual mutual fund holding support.
-* Add AMFI NAV sync support.
-* Match mutual fund holdings to AMFI schemes.
-* Include mutual funds in portfolio snapshot.
-* Show NAV date and stale NAV warnings.
+* Add instrument and market-data foundations.
+* Add price/candle storage with freshness metadata.
+* Keep portfolio and expense behavior stable.
 * Keep existing expense tracker behavior unchanged.
 * Do not implement scanner yet.
 * Do not implement MCP yet.
@@ -168,4 +182,4 @@ rawPayload where useful for debugging
 
 If data is stale, missing, unofficial, or partially synced, the UI/API must show a warning.
 
-If symbol/security mapping is uncertain, trade validation/scanner must reject the setup later.
+If symbol/security mapping is uncertain, trade validation/scanner must reject the setup later

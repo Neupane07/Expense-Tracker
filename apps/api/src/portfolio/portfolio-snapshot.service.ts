@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BrokerProvider, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllocationService } from './allocation.service';
+import { MutualFundsService } from './mutual-funds/mutual-funds.service';
 
 type DecimalLike = {
   toNumber(): number;
@@ -12,11 +13,13 @@ export class PortfolioSnapshotService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly allocationService: AllocationService,
+    private readonly mutualFundsService: MutualFundsService,
   ) {}
 
   async createSnapshotFromLatest(userId: string, syncRunId?: string) {
     const holdings = await this.findHoldings(userId, syncRunId);
     const fund = await this.findFund(userId, syncRunId);
+    const mutualFunds = await this.mutualFundsService.getValuations(userId);
     const cashValue = this.decimalToNumber(fund?.availableBalance);
     const allocation = this.allocationService.calculateStockEtfCashAllocation(
       holdings.map((holding) => ({
@@ -24,6 +27,7 @@ export class PortfolioSnapshotService {
         marketValue: this.decimalToNumber(holding.marketValue),
       })),
       cashValue,
+      mutualFunds.totalValue,
     );
     const brokerAccountIds = new Set(
       [
@@ -35,7 +39,10 @@ export class PortfolioSnapshotService {
       brokerAccountIds.size === 1
         ? (Array.from(brokerAccountIds)[0] as string)
         : null;
-    const warnings = this.buildWarnings(holdings.length, fund !== null);
+    const warnings = [
+      ...this.buildWarnings(holdings.length, fund !== null),
+      ...mutualFunds.warnings,
+    ];
     const snapshot = await this.prisma.portfolioSnapshot.create({
       data: {
         userId,
@@ -43,6 +50,7 @@ export class PortfolioSnapshotService {
         snapshotTime: new Date(),
         totalStockValue: allocation.stockValue,
         totalEtfValue: allocation.etfValue,
+        totalMfValue: allocation.mutualFundValue,
         totalCashValue: allocation.cashValue,
         totalValue: allocation.totalValue,
         allocation: this.toJson(allocation),
@@ -51,6 +59,10 @@ export class PortfolioSnapshotService {
           syncRunId: syncRunId ?? null,
           holdingCount: holdings.length,
           fundSnapshotId: fund?.id ?? null,
+          mutualFundHoldingCount: mutualFunds.holdings.length,
+          mutualFundNavDates: mutualFunds.holdings
+            .map((holding) => holding.navDate?.toISOString().slice(0, 10))
+            .filter(Boolean),
         }),
         warnings,
       },
@@ -61,12 +73,14 @@ export class PortfolioSnapshotService {
       snapshotTime: snapshot.snapshotTime,
       brokerAccountId: snapshot.brokerAccountId,
       allocation,
+      mutualFunds,
       warnings,
       source: {
         brokerProvider: BrokerProvider.DHAN,
         syncRunId: syncRunId ?? null,
         holdingCount: holdings.length,
         fundSnapshotId: fund?.id ?? null,
+        mutualFundHoldingCount: mutualFunds.holdings.length,
       },
     };
   }

@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { BrokerService } from '../broker/broker.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type {
+  CreateMutualFundHoldingInput,
+  UpdateMutualFundHoldingInput,
+} from './mutual-funds/mutual-funds.service';
+import { MutualFundsService } from './mutual-funds/mutual-funds.service';
 import { PortfolioSnapshotService } from './portfolio-snapshot.service';
 
 type DecimalLike = {
@@ -13,6 +18,7 @@ export class PortfolioService {
     private readonly prisma: PrismaService,
     private readonly brokerService: BrokerService,
     private readonly portfolioSnapshotService: PortfolioSnapshotService,
+    private readonly mutualFundsService: MutualFundsService,
   ) {}
 
   getStatus() {
@@ -102,6 +108,30 @@ export class PortfolioService {
       exchangeTime: row.exchangeTime,
       rawPayload: row.rawPayload,
     }));
+  }
+
+  getMutualFunds(userId: string) {
+    return this.mutualFundsService.findAll(userId);
+  }
+
+  createMutualFund(userId: string, input: CreateMutualFundHoldingInput) {
+    return this.mutualFundsService.create(userId, input);
+  }
+
+  updateMutualFund(
+    userId: string,
+    holdingId: string,
+    input: UpdateMutualFundHoldingInput,
+  ) {
+    return this.mutualFundsService.update(userId, holdingId, input);
+  }
+
+  deleteMutualFund(userId: string, holdingId: string) {
+    return this.mutualFundsService.remove(userId, holdingId);
+  }
+
+  syncAmfiNav(userId: string) {
+    return this.mutualFundsService.syncAmfiNav(userId);
   }
 
   private decimalToNumber(value: DecimalLike | null | undefined) {

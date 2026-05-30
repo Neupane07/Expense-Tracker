@@ -35,9 +35,9 @@ Tasks:
 - Do not change Prisma schema
 - Do not change deployment
 
-### Phase 2: Portfolio snapshot
+### Phase 2: Portfolio snapshot and mutual funds
 
-Status: Started with read-only foundation
+Status: Completed through mutual fund valuation
 
 Tasks:
 
@@ -45,7 +45,7 @@ Tasks:
 - Add Dhan read-only holdings sync
 - Add manual MF input support
 - Add AMFI NAV sync
-- Add allocation dashboard
+- Include mutual fund valuation in portfolio snapshots
 
 ### Phase 3: Market data
 
@@ -114,3 +114,12 @@ Tasks:
 - Dhan sync uses `DHAN_BASE_URL`, `DHAN_CLIENT_ID`, and `DHAN_ACCESS_TOKEN`.
 - No order placement APIs or scanner behavior were added.
 - Expense module behavior was left unchanged.
+- Added Phase 2 mutual fund support:
+  - Manual mutual fund holding CRUD under `/portfolio/mutual-funds`.
+  - AMFI NAV sync under `POST /portfolio/sync/amfi-nav`.
+  - AMFI scheme matching by normalized scheme name, with manual `schemeCode` override taking precedence.
+  - Mutual fund value, NAV, NAV date, P&L, and stale NAV warnings in portfolio valuation output.
+  - Portfolio snapshots now include mutual fund allocation and `totalMfValue`.
+  - Unit tests cover AMFI matching, valuation math, stale NAV warnings, and updated allocation math.
+- AMFI sync uses `AMFI_NAV_URL`, defaulting to `https://www.amfiindia.com/spages/NAVAll.txt`.
+- Scanner, MCP, and order placement remain unimplemented.

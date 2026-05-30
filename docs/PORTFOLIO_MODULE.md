@@ -85,6 +85,13 @@ MF ownership may be imported manually initially.
 
 NAV must be fetched from AMFI where possible.
 
+Phase 2 uses manual holdings and AMFI `NAVAll.txt`:
+
+- holdings are matched to AMFI by normalized scheme name
+- a manual `schemeCode` override takes precedence over name matching
+- only matched NAV rows for the user's holdings are stored
+- stale NAVs must produce visible warnings
+
 Each MF valuation must include:
 
 - scheme name
@@ -147,6 +154,10 @@ Possible endpoints:
 - `GET /portfolio/snapshot`
 - `GET /portfolio/holdings`
 - `GET /portfolio/mutual-funds`
+- `POST /portfolio/mutual-funds`
+- `PATCH /portfolio/mutual-funds/:holdingId`
+- `DELETE /portfolio/mutual-funds/:holdingId`
+- `POST /portfolio/sync/amfi-nav`
 - `GET /portfolio/allocation`
 - `GET /portfolio/exposure`
 - `GET /portfolio/risk`

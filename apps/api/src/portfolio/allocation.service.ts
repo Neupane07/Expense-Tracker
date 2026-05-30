@@ -9,10 +9,12 @@ export type AllocationInput = {
 export type AllocationResult = {
   stockValue: number;
   etfValue: number;
+  mutualFundValue: number;
   cashValue: number;
   totalValue: number;
   stockPercent: number;
   etfPercent: number;
+  mutualFundPercent: number;
   cashPercent: number;
 };
 
@@ -21,6 +23,7 @@ export class AllocationService {
   calculateStockEtfCashAllocation(
     holdings: AllocationInput[],
     cashValue: number,
+    mutualFundValue = 0,
   ): AllocationResult {
     const stockValue = holdings
       .filter((holding) => holding.assetClass === PortfolioAssetClass.STOCK)
@@ -28,16 +31,21 @@ export class AllocationService {
     const etfValue = holdings
       .filter((holding) => holding.assetClass === PortfolioAssetClass.ETF)
       .reduce((total, holding) => total + holding.marketValue, 0);
+    const roundedMutualFundValue = roundMoney(mutualFundValue);
     const roundedCashValue = roundMoney(cashValue);
-    const totalValue = roundMoney(stockValue + etfValue + roundedCashValue);
+    const totalValue = roundMoney(
+      stockValue + etfValue + roundedMutualFundValue + roundedCashValue,
+    );
 
     return {
       stockValue: roundMoney(stockValue),
       etfValue: roundMoney(etfValue),
+      mutualFundValue: roundedMutualFundValue,
       cashValue: roundedCashValue,
       totalValue,
       stockPercent: percent(stockValue, totalValue),
       etfPercent: percent(etfValue, totalValue),
+      mutualFundPercent: percent(roundedMutualFundValue, totalValue),
       cashPercent: percent(roundedCashValue, totalValue),
     };
   }
