@@ -195,7 +195,8 @@ With the API and web app running, verify:
   values when present.
 - Risk validation and position sizing render backend results without generating
   scanner candidates or placing orders.
-- `/scanner` runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, and shows research-only disclaimer text.
+- `/scanner` runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, shows research-only disclaimer text, and can save a candidate to the journal.
+- `/trade-journal` lists entries, creates manual plans, closes trades with review fields, and shows the manual-execution disclaimer.
 
 ## Scanner tests
 
@@ -233,5 +234,75 @@ Scanner checks should show:
 - candidate `rejectReasons`, `warnings`, `dataQuality`, and `confidenceCapReason` when applicable
 - `status` of `candidate`, `watchlist`, or `rejected`
 - shared risk validation rejections such as `PRICE_STALE`, `RISK_REWARD_BELOW_MINIMUM`, and `SYMBOL_NOT_VERIFIED`
+- no order placement, modification, or cancellation endpoints
+- no broker secrets in any response
+
+## Trade journal tests
+
+List journal entries:
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  "http://localhost:4000/trade-journal/entries?status=PLANNED"
+```
+
+Create a manual DELIVERY plan:
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/trade-journal/entries \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "INFY",
+    "side": "BUY",
+    "product": "DELIVERY",
+    "plannedEntry": 1500,
+    "plannedTarget": 1620,
+    "plannedStopLoss": 1450,
+    "quantity": 5,
+    "setupType": "BREAKOUT",
+    "notes": "Manual swing plan"
+  }'
+```
+
+Save a plan from the latest scanner candidate (explicit user action):
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/trade-journal/entries/from-scanner-candidate \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "INFY",
+    "setupType": "BREAKOUT"
+  }'
+```
+
+Close a trade with exit review fields:
+
+```bash
+curl -i \
+  -X PATCH http://localhost:4000/trade-journal/entries/<entry-id> \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "CLOSED",
+    "exitPrice": 1580,
+    "exitReason": "Target nearly reached",
+    "mistakeTags": ["EARLY_EXIT"],
+    "lessonLearned": "Stick to the original target plan"
+  }'
+```
+
+Trade journal checks should show:
+
+- `disclaimer` stating the journal does not place orders
+- `validationSnapshot` with `warnings` and `rejectReasons` at creation
+- `PRODUCT_NOT_DELIVERY` rejection for non-DELIVERY products
+- `SYMBOL_NOT_VERIFIED` rejection for unmapped symbols
+- close rejected without `exitPrice`
+- delete allowed only for `PLANNED` or `CANCELLED` entries
 - no order placement, modification, or cancellation endpoints
 - no broker secrets in any response

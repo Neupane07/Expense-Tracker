@@ -5,10 +5,8 @@ import { AppLayout } from "@/components/layout/app-layout"
 import { AdminInvitationsPage } from "@/pages/admin-invitations-page"
 import { DashboardPage } from "@/pages/dashboard-page"
 import { DhanConnectionPage } from "@/pages/dhan-connection-page"
-import {
-  ResearchPage,
-  TradeJournalPage,
-} from "@/pages/finance-placeholder-page"
+import { ResearchPage } from "@/pages/finance-placeholder-page"
+import { TradeJournalPage } from "@/pages/trade-journal-page"
 import { SwingScannerPage } from "@/pages/scanner-page"
 import { ImportsPage } from "@/pages/imports-page"
 import { LoadingState } from "@/pages/page-state"

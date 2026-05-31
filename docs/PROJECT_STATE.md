@@ -122,6 +122,21 @@ Expected completed work:
 * Existing expense tracker behavior remains unchanged.
 * MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
 
+### Phase 6: Trade journal foundation
+
+Status: Completed by Codex
+
+Expected completed work:
+
+* `TradeJournalEntry` Prisma model and migration added (user-scoped, DELIVERY-only v1).
+* CRUD API under `/trade-journal/entries` with list filters, plan updates, close/review fields, and delete rules for planned/cancelled entries.
+* `POST /trade-journal/entries/from-scanner-candidate` creates a planned entry from an explicit scanner save action with risk validation snapshot.
+* Symbol verification via instruments service; risk validation via shared trade validation service (no duplicated risk math).
+* Trade Journal UI at `/trade-journal` with list, manual plan form, close/review form, and scanner **Save to journal** action.
+* Tests for CRUD paths, DELIVERY enforcement, invalid symbol rejection, close validation, and no broker order placement.
+* Existing expense tracker behavior remains unchanged.
+* MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
+
 ### Phase 4.5: Finance OS portfolio, market-data, and risk UI
 
 Status: Completed by Codex
@@ -169,19 +184,18 @@ Can access new placeholder Finance OS pages
 
 ## Current priority
 
-Move from swing scanner foundation to the next safe foundation phase.
+Move from trade journal foundation to the next safe foundation phase.
 
 Next phase:
 
 ```text
-Trade journal foundation
+MCP read-only tools
 ```
 
 Next phase goal:
 
-* Capture manual trade plans and post-trade reviews.
-* Keep portfolio, scanner, and expense behavior stable.
-* Do not implement MCP yet.
+* Expose read-only portfolio/scanner/risk tools for AI access.
+* Keep expense, portfolio, scanner, and journal behavior stable.
 * Do not implement order execution.
 
 ## Hard boundaries

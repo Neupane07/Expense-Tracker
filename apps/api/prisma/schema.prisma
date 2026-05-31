@@ -82,6 +82,7 @@ model User {
   mutualFundNavs          MutualFundNav[]
   portfolioSnapshots      PortfolioSnapshot[]
   swingScanRuns           SwingScanRun[]
+  tradeJournalEntries     TradeJournalEntry[]
   invitationsCreated      Invitation[]             @relation("InvitationCreator")
   invitationAccepted      Invitation?              @relation("InvitationAccepted")
   createdAt               DateTime                 @default(now())
@@ -631,4 +632,51 @@ model SwingScanRun {
   createdAt       DateTime @default(now())
 
   @@index([userId, runAt])
+}
+
+enum TradeJournalEntryStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum TradeJournalSource {
+  MANUAL
+  FROM_SCANNER
+}
+
+model TradeJournalEntry {
+  id                  String                  @id @default(cuid())
+  userId              String
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol              String
+  side                String                  @default("BUY")
+  product             String                  @default("DELIVERY")
+  plannedEntry        Decimal                 @db.Decimal(14, 4)
+  plannedTarget       Decimal                 @db.Decimal(14, 4)
+  plannedStopLoss     Decimal                 @db.Decimal(14, 4)
+  quantity            Int
+  setupType           String?
+  status              TradeJournalEntryStatus @default(PLANNED)
+  notes               String?
+  source              TradeJournalSource      @default(MANUAL)
+  swingScanRunId      String?
+  scannerCandidateKey String?
+  validationSnapshot  Json?
+  dataQuality         Json?
+  exitPrice           Decimal?                @db.Decimal(14, 4)
+  exitAt              DateTime?
+  actualPnl           Decimal?                @db.Decimal(18, 2)
+  exitReason          String?
+  mistakeTags         String[]
+  lessonLearned       String?
+  closedAt            DateTime?
+  cancelledAt         DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, symbol])
+  @@index([userId, createdAt])
 }

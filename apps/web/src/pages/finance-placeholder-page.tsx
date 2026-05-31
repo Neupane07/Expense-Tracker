@@ -28,15 +28,6 @@ export function FinancePlaceholderPage({
   )
 }
 
-export function TradeJournalPage() {
-  return (
-    <FinancePlaceholderPage
-      title="Trade Journal"
-      scope="Trade plans, exits, and post-trade reviews will be added in a later phase."
-    />
-  )
-}
-
 export function ResearchPage() {
   return (
     <FinancePlaceholderPage

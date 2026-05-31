@@ -1,5 +1,5 @@
 import { type FormEvent, useMemo, useState } from "react"
-import { Play, ScanSearch } from "lucide-react"
+import { ClipboardList, Play, ScanSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -114,6 +114,8 @@ export function SwingScannerPage() {
   const [scanError, setScanError] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [lastRun, setLastRun] = useState<SwingScanRunResponse | null>(null)
+  const [journalMessage, setJournalMessage] = useState<string | null>(null)
+  const [isSavingJournal, setIsSavingJournal] = useState(false)
 
   const candidatesQuery = useApiQuery<SwingCandidatesResponse>(
     "/scanner/swing/candidates",
@@ -146,6 +148,37 @@ export function SwingScannerPage() {
 
     return candidates[0] ?? null
   }, [candidates, selectedKey])
+
+  async function saveToJournal() {
+    if (!selectedCandidate || isSavingJournal) {
+      return
+    }
+
+    setJournalMessage(null)
+    setIsSavingJournal(true)
+
+    try {
+      const result = await apiPostJson<{ entry: { id: string; symbol: string } }>(
+        "/trade-journal/entries/from-scanner-candidate",
+        {
+          symbol: selectedCandidate.symbol,
+          setupType: selectedCandidate.setupType,
+          swingScanRunId: lastRun?.runId ?? candidatesQuery.data?.run?.id,
+        },
+      )
+      setJournalMessage(
+        `Saved ${result.entry.symbol} to trade journal. Open Trade Journal to review or delete the plan.`,
+      )
+    } catch (error) {
+      setJournalMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save candidate to trade journal.",
+      )
+    } finally {
+      setIsSavingJournal(false)
+    }
+  }
 
   async function runScan(event: FormEvent) {
     event.preventDefault()
@@ -404,6 +437,19 @@ export function SwingScannerPage() {
                     ) : null}
                   </div>
                 </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={isSavingJournal}
+                  onClick={() => void saveToJournal()}
+                >
+                  <ClipboardList className="mr-2 size-4" />
+                  {isSavingJournal ? "Saving…" : "Save to journal"}
+                </Button>
+                {journalMessage ? (
+                  <p className="text-xs text-muted-foreground">{journalMessage}</p>
+                ) : null}
               </>
             )}
           </CardContent>

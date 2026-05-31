@@ -84,14 +84,26 @@ Tasks:
 - Add read-only Swing Scanner UI.
 - Keep order placement disabled.
 
-### Phase 6: MCP tools
+### Phase 6: Trade journal foundation
+
+Status: Completed
+
+Tasks:
+
+- Add `TradeJournalEntry` model and migration.
+- Add trade journal CRUD and from-scanner endpoints.
+- Wire risk validation snapshots at plan creation.
+- Add Trade Journal UI and scanner save-to-journal action.
+- Keep order placement disabled.
+
+### Phase 7: MCP tools
 
 Status: Not started
 
 Tasks:
 
 - Add read-only MCP server
-- Expose portfolio/scanner/risk tools
+- Expose portfolio/scanner/risk/journal tools
 - Add audit logs
 - Keep order placement disabled
 
@@ -211,4 +223,14 @@ Tasks:
   - `SwingScanRun` table stores latest scan output per user.
   - Read-only `/scanner` UI added with run action, results table, and candidate detail panel.
   - Scanner remains research-only; no order placement, modification, cancellation, MCP, MTF, or F&O behavior was added.
+  - Existing expense tracker routes and backend business rules were left unchanged.
+
+- Added Phase 6 trade journal foundation:
+  - `TradeJournalEntry` table with plan levels, status lifecycle, exit/review fields, and validation snapshots.
+  - Endpoints: `GET/POST /trade-journal/entries`, `GET/PATCH/DELETE /trade-journal/entries/:id`, and `POST /trade-journal/entries/from-scanner-candidate`.
+  - Manual plans verify symbols via instruments service and store shared risk validation snapshots.
+  - From-scanner creation copies candidate defaults only after explicit user action; stores `swingScanRunId` and `scannerCandidateKey` references without denormalized scanner math.
+  - `/trade-journal` UI replaces the placeholder with list, plan form, close/review form, and disclaimer.
+  - Scanner candidate detail adds **Save to journal**.
+  - No order placement, MCP, MTF, or F&O behavior was added.
   - Existing expense tracker routes and backend business rules were left unchanged.
