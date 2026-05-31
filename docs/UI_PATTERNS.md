@@ -114,6 +114,52 @@ Charts:
 - Source-wise spend
 - Monthly trend
 
+### Portfolio
+Route: `/portfolio`
+
+Use tabs for Finance OS portfolio work:
+
+- Holdings
+- Mutual Funds
+- Market Data
+- Risk
+
+Patterns:
+
+- Keep the screen dense and operational, not marketing-oriented.
+- Use compact metric panels for cash, total value, allocation, and risk outputs.
+- Use tables for holdings, orders, mutual funds, candles, and exposure.
+- Show backend warnings and reject reasons as visible badges or alert rows.
+- Label stale, missing, fallback, or low-confidence data wherever the API
+  returns data-quality metadata.
+- Keep broker actions read-only; never show raw broker secrets.
+- Do not calculate scanner scores or trading decisions in the frontend.
+
+### Swing Scanner
+Route: `/scanner`
+
+Patterns:
+
+- Show the research-only disclaimer prominently: verify and place manually in Dhan.
+- Provide a run-scan action wired to `POST /scanner/swing/run`.
+- Load latest results from `GET /scanner/swing/candidates`.
+- Use a table for candidates and a side/detail panel for entry, target, stop loss, R:R, quantity, confidence, reject reasons, and data-quality badges.
+- Render backend `status`, `rejectReasons`, `warnings`, and `dataQuality` without recomputing scores client-side.
+- Do not generate orders, broker actions, or auto-trading controls.
+- Optional **Save to journal** on candidate detail calls `POST /trade-journal/entries/from-scanner-candidate` only after explicit user click.
+
+### Trade Journal
+Route: `/trade-journal`
+
+Patterns:
+
+- Show disclaimer prominently: journal does not place orders; verify and execute manually in Dhan.
+- Table of entries with status/symbol filters; backend owns status rules and P&L math.
+- Manual plan form for DELIVERY BUY setups (symbol, entry, SL, target, quantity, setup, notes).
+- Close/review form captures exit price, reason, mistake tags, and lesson learned.
+- Render stored `validationSnapshot` warnings/rejects without recomputing risk client-side.
+- Do not add broker order actions or auto-trading controls.
+
 ### Invitations
 Route: `/admin/invitations`
 

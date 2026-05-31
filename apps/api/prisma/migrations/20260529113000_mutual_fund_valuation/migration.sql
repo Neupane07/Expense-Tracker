@@ -1,0 +1,2 @@
+ALTER TABLE "PortfolioSnapshot"
+ADD COLUMN "totalMfValue" DECIMAL(18,2) NOT NULL DEFAULT 0;

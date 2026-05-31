@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { apiGet } from "@/lib/api-client"
 
 type QueryState<T> = {
@@ -15,6 +15,12 @@ export function useApiQuery<T>(path: string) {
     isLoading: true,
     path,
   })
+
+  const refetch = useCallback(async () => {
+    const data = await apiGet<T>(path)
+    setState({ data, error: null, isLoading: false, path })
+    return data
+  }, [path])
 
   useEffect(() => {
     let isCurrent = true
@@ -44,5 +50,6 @@ export function useApiQuery<T>(path: string) {
   return {
     ...state,
     isLoading: state.path !== path || state.isLoading,
+    refetch,
   }
 }
