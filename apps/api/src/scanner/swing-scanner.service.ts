@@ -12,6 +12,10 @@ import type {
   TradeValidationResult,
 } from '../risk/trade-validation.service';
 import { TradeValidationService } from '../risk/trade-validation.service';
+import {
+  ResearchSnapshotService,
+  type ScannerResearchStatus,
+} from '../research/research-snapshot.service';
 import type { RunSwingScanInput, SwingSetupType } from './scanner.dto';
 import {
   componentScores,
@@ -72,6 +76,11 @@ export type SwingCandidate = {
     validity: 'DAY';
   } | null;
   researchDisclaimer: string;
+  researchFreshness: 'fresh' | 'stale' | 'missing';
+  latestResearchAt: string | null;
+  researchWarnings: string[];
+  evidenceCount: number;
+  riskFlags: string[];
 };
 
 const RESEARCH_DISCLAIMER =
@@ -88,6 +97,7 @@ export class SwingScannerService {
     private readonly tradeValidation: TradeValidationService,
     private readonly exposure: ExposureService,
     private readonly riskSettings: RiskSettingsService,
+    private readonly researchSnapshots: ResearchSnapshotService,
   ) {}
 
   async runScan(userId: string, input: RunSwingScanInput = {}) {
@@ -207,6 +217,11 @@ export class SwingScannerService {
     const normalizedSymbol = symbol.trim().toUpperCase();
     const rejectReasons: string[] = [];
     const warnings: string[] = [];
+    const researchStatus =
+      await this.researchSnapshots.getScannerResearchStatus(
+        userId,
+        normalizedSymbol,
+      );
 
     let instrumentRecord: Awaited<
       ReturnType<InstrumentsService['findBySymbol']>
@@ -227,6 +242,7 @@ export class SwingScannerService {
             rejectReasons: ['UNKNOWN_SYMBOL'],
             warnings: [],
             dataQuality: emptyDataQuality(),
+            researchStatus,
           }),
         ];
       }
@@ -243,6 +259,7 @@ export class SwingScannerService {
           rejectReasons: ['SYMBOL_NOT_VERIFIED'],
           warnings: ['SECURITY_ID_MISSING'],
           dataQuality: emptyDataQuality(),
+          researchStatus,
         }),
       ];
     }
@@ -261,6 +278,7 @@ export class SwingScannerService {
           rejectReasons: ['PRICE_MISSING'],
           warnings: [],
           dataQuality: emptyDataQuality(),
+          researchStatus,
         }),
       ];
     }
@@ -281,6 +299,7 @@ export class SwingScannerService {
           dataQuality: buildDataQuality(
             priceResponse as unknown as PriceResponseShape,
           ),
+          researchStatus,
         }),
       ];
     }
@@ -296,6 +315,7 @@ export class SwingScannerService {
           dataQuality: buildDataQuality(
             priceResponse as unknown as PriceResponseShape,
           ),
+          researchStatus,
         }),
       ];
     }
@@ -318,6 +338,7 @@ export class SwingScannerService {
           dataQuality: buildDataQuality(
             priceResponse as unknown as PriceResponseShape,
           ),
+          researchStatus,
         }),
       ];
     }
@@ -334,6 +355,7 @@ export class SwingScannerService {
             priceResponse as unknown as PriceResponseShape,
             candleResponse.source,
           ),
+          researchStatus,
         }),
       ];
     }
@@ -377,6 +399,7 @@ export class SwingScannerService {
             priceResponse as unknown as PriceResponseShape,
             indicatorResponse.source,
           ),
+          researchStatus,
         }),
       ];
     }
@@ -409,6 +432,8 @@ export class SwingScannerService {
         ...riskValidation.warnings,
         ...(indicatorResponse.warnings ?? []),
         ...(candleResponse.warnings ?? []),
+        ...researchStatus.researchWarnings,
+        ...researchStatus.riskFlags,
       ]);
 
       const scores = componentScores({
@@ -433,7 +458,8 @@ export class SwingScannerService {
         alreadyHeldHighExposure:
           riskValidation.portfolioExposureAfter.percent > 10,
         marketRegimeRiskOff: false,
-        hasFreshNewsOrFiling: false,
+        hasFreshNewsOrFiling: researchStatus.hasFreshNewsOrFiling,
+        hasStaleResearch: researchStatus.hasStaleResearch,
       });
       const portfolioFitWarnings: string[] = [];
 
@@ -503,6 +529,11 @@ export class SwingScannerService {
               }
             : null,
         researchDisclaimer: RESEARCH_DISCLAIMER,
+        researchFreshness: researchStatus.researchFreshness,
+        latestResearchAt: researchStatus.latestResearchAt,
+        researchWarnings: researchStatus.researchWarnings,
+        evidenceCount: researchStatus.evidenceCount,
+        riskFlags: researchStatus.riskFlags,
       });
     }
 
@@ -516,7 +547,14 @@ export class SwingScannerService {
     rejectReasons: string[];
     warnings: string[];
     dataQuality: SwingCandidate['dataQuality'];
+    researchStatus: ScannerResearchStatus;
   }): SwingCandidate {
+    const mergedWarnings = unique([
+      ...input.warnings,
+      ...input.researchStatus.researchWarnings,
+      ...input.researchStatus.riskFlags,
+    ]);
+
     return {
       symbol: input.symbol,
       name: input.name,
@@ -542,12 +580,17 @@ export class SwingScannerService {
         warnings: [],
       },
       rejectReasons: unique(input.rejectReasons),
-      warnings: input.warnings,
+      warnings: mergedWarnings,
       dataQuality: input.dataQuality,
       riskValidation: null,
       status: 'rejected',
       suggestedOrderParams: null,
       researchDisclaimer: RESEARCH_DISCLAIMER,
+      researchFreshness: input.researchStatus.researchFreshness,
+      latestResearchAt: input.researchStatus.latestResearchAt,
+      researchWarnings: input.researchStatus.researchWarnings,
+      evidenceCount: input.researchStatus.evidenceCount,
+      riskFlags: input.researchStatus.riskFlags,
     };
   }
 }

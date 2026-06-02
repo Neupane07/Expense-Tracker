@@ -51,7 +51,10 @@ export class BrokerHoldingsQueryService {
       }),
     ]);
     const syncAsOf =
-      fundSnapshot?.asOf ?? rawHoldings[0]?.asOf ?? orders[0]?.asOf ?? new Date();
+      fundSnapshot?.asOf ??
+      rawHoldings[0]?.asOf ??
+      orders[0]?.asOf ??
+      new Date();
     const reconciled = reconcileDhanHoldings(
       rawHoldings.map((holding) => ({
         ...holding,

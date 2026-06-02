@@ -197,6 +197,8 @@ With the API and web app running, verify:
   scanner candidates or placing orders.
 - `/scanner` runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, shows research-only disclaimer text, and can save a candidate to the journal.
 - `/trade-journal` lists entries, creates manual plans, closes trades with review fields, and shows the manual-execution disclaimer.
+- `/research` loads symbol evidence, shows snapshot/warnings/data quality, adds manual items, and regenerates snapshots.
+- `/scanner` candidate detail shows research status and links to `/research?symbol=...`.
 
 ## Scanner tests
 
@@ -236,6 +238,69 @@ Scanner checks should show:
 - shared risk validation rejections such as `PRICE_STALE`, `RISK_REWARD_BELOW_MINIMUM`, and `SYMBOL_NOT_VERIFIED`
 - no order placement, modification, or cancellation endpoints
 - no broker secrets in any response
+
+## Research tests
+
+List research items (optional filters):
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  "http://localhost:4000/research/items?symbol=INFY"
+```
+
+Add manual research evidence:
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/research/items \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "INFY",
+    "title": "Q4 results beat estimates",
+    "summary": "Revenue grew 12% YoY per stored filing note.",
+    "category": "RESULT",
+    "impact": "POSITIVE",
+    "sourceType": "USER_URL",
+    "sourceName": "User",
+    "sourceUrl": "https://example.com/results",
+    "publishedAt": "2026-05-28T00:00:00.000Z"
+  }'
+```
+
+Get symbol research bundle (snapshot, items, warnings, data quality):
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  http://localhost:4000/research/INFY
+```
+
+Regenerate deterministic snapshot:
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/research/INFY/snapshot \
+  -H "Cookie: finance_os_session=<session-cookie>"
+```
+
+Delete a user-owned research item:
+
+```bash
+curl -i \
+  -X DELETE http://localhost:4000/research/items/<item-id> \
+  -H "Cookie: finance_os_session=<session-cookie>"
+```
+
+Research checks should show:
+
+- `dataQuality.status` of `fresh`, `stale`, `missing`, `user-provided`, or `official`
+- `RESEARCH_EVIDENCE_MISSING` when no items exist
+- `STALE_RESEARCH_EVIDENCE` when evidence is older than threshold
+- scanner candidates with `researchFreshness`, `researchWarnings`, and confidence caps when research is missing/stale
+- summaries derived only from stored item text (no AI-generated facts)
+- no order placement, MCP, or broker secrets in responses
 
 ## Trade journal tests
 

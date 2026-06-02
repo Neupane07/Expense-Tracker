@@ -96,14 +96,27 @@ Tasks:
 - Add Trade Journal UI and scanner save-to-journal action.
 - Keep order placement disabled.
 
-### Phase 7: MCP tools
+### Phase 7: Research evidence engine
+
+Status: Completed
+
+Tasks:
+
+- Add `ResearchItem`, `ResearchEvidence`, and `ResearchSnapshot` models and migration.
+- Add research services, quality checks, and manual/placeholder providers.
+- Add research API endpoints (authenticated, user-scoped).
+- Integrate research freshness into swing scanner output and confidence caps.
+- Replace Research placeholder UI; link scanner detail to research by symbol.
+- Keep order placement and MCP disabled.
+
+### Phase 8: MCP tools
 
 Status: Not started
 
 Tasks:
 
 - Add read-only MCP server
-- Expose portfolio/scanner/risk/journal tools
+- Expose portfolio/scanner/risk/journal/research tools
 - Add audit logs
 - Keep order placement disabled
 
@@ -233,4 +246,17 @@ Tasks:
   - `/trade-journal` UI replaces the placeholder with list, plan form, close/review form, and disclaimer.
   - Scanner candidate detail adds **Save to journal**.
   - No order placement, MCP, MTF, or F&O behavior was added.
+  - Existing expense tracker routes and backend business rules were left unchanged.
+
+### 2026-06-02
+
+- Added Phase 7 research evidence engine:
+  - Prisma models `ResearchItem`, `ResearchEvidence`, `ResearchSnapshot` with category/impact enums.
+  - Services for items, snapshots, ingestion, and data-quality warnings.
+  - Provider stubs for official filings and news; manual/user URL provider active.
+  - Endpoints: `GET/POST /research/items`, `DELETE /research/items/:id`, `GET /research/:symbol`, `POST /research/:symbol/snapshot`.
+  - Swing scanner exposes research freshness, warnings, evidence count, and risk flags; applies `NO_FRESH_NEWS_OR_FILING_CHECK` and `STALE_RESEARCH_EVIDENCE` caps.
+  - `/research` UI for symbol evidence management; scanner detail links to research.
+  - `docs/RESEARCH_MODULE.md` added.
+  - No MCP, order placement, auto trading, MTF, or F&O behavior was added.
   - Existing expense tracker routes and backend business rules were left unchanged.

@@ -28,11 +28,3 @@ export function FinancePlaceholderPage({
   )
 }
 
-export function ResearchPage() {
-  return (
-    <FinancePlaceholderPage
-      title="Research"
-      scope="Company evidence, filings, news notes, and dated research will be added in a later phase."
-    />
-  )
-}

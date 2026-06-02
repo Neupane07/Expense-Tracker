@@ -122,6 +122,26 @@ Expected completed work:
 * Existing expense tracker behavior remains unchanged.
 * MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
 
+### Phase 7: Research evidence engine
+
+Status: Completed by Codex
+
+Expected completed work:
+
+* `ResearchItem`, `ResearchEvidence`, and `ResearchSnapshot` Prisma models and migration added.
+* Research services: items, snapshot, ingestion, and quality under `apps/api/src/research/`.
+* Provider abstractions: manual (active), official filings and news (stubs/TODO).
+* API endpoints: `GET/POST /research/items`, `DELETE /research/items/:id`, `GET /research/:symbol`, `POST /research/:symbol/snapshot`.
+* Deterministic snapshot generation from stored items only (no AI summarization).
+* Stale/missing evidence warnings and configurable freshness threshold.
+* Swing scanner candidates include research freshness, warnings, evidence count, and risk flags.
+* Confidence caps: `NO_FRESH_NEWS_OR_FILING_CHECK`, `STALE_RESEARCH_EVIDENCE`.
+* `/research` UI replaces placeholder with symbol lookup, snapshot, items table, and manual add form.
+* Scanner candidate detail links to research for the symbol.
+* Tests for CRUD, snapshot, stale/missing warnings, scanner caps, and ownership checks.
+* Existing expense tracker behavior remains unchanged.
+* MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
+
 ### Phase 6: Trade journal foundation
 
 Status: Completed by Codex
@@ -184,7 +204,7 @@ Can access new placeholder Finance OS pages
 
 ## Current priority
 
-Move from trade journal foundation to the next safe foundation phase.
+Move from research evidence foundation to the next safe foundation phase.
 
 Next phase:
 
@@ -194,8 +214,8 @@ MCP read-only tools
 
 Next phase goal:
 
-* Expose read-only portfolio/scanner/risk tools for AI access.
-* Keep expense, portfolio, scanner, and journal behavior stable.
+* Expose read-only portfolio/scanner/risk/research tools for AI access.
+* Keep expense, portfolio, scanner, journal, and research behavior stable.
 * Do not implement order execution.
 
 ## Hard boundaries

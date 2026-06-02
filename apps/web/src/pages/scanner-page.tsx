@@ -1,4 +1,5 @@
 import { type FormEvent, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { ClipboardList, Play, ScanSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -58,6 +59,11 @@ type SwingCandidate = {
   }
   status: "candidate" | "rejected" | "watchlist"
   researchDisclaimer: string
+  researchFreshness: "fresh" | "stale" | "missing"
+  latestResearchAt: string | null
+  researchWarnings: string[]
+  evidenceCount: number
+  riskFlags: string[]
 }
 
 type SwingScanRunResponse = {
@@ -421,6 +427,46 @@ export function SwingScannerPage() {
                     </div>
                   </div>
                 ) : null}
+                <div className="space-y-1">
+                  <p className="font-medium">Research status</p>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="outline">
+                      {selectedCandidate.researchFreshness ?? "missing"}
+                    </Badge>
+                    <Badge variant="outline">
+                      evidence: {selectedCandidate.evidenceCount ?? 0}
+                    </Badge>
+                    {selectedCandidate.latestResearchAt ? (
+                      <Badge variant="outline">
+                        latest: {formatDateTime(selectedCandidate.latestResearchAt)}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {(selectedCandidate.researchWarnings ?? []).length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {(selectedCandidate.researchWarnings ?? []).map((warning) => (
+                        <Badge key={warning} variant="outline">
+                          {warning}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  {(selectedCandidate.riskFlags ?? []).length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {(selectedCandidate.riskFlags ?? []).map((flag) => (
+                        <Badge key={flag} variant="destructive">
+                          {flag}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  <Link
+                    to={`/research?symbol=${encodeURIComponent(selectedCandidate.symbol)}`}
+                    className="text-sm text-primary underline"
+                  >
+                    Open research for {selectedCandidate.symbol}
+                  </Link>
+                </div>
                 <div className="space-y-1">
                   <p className="font-medium">Data quality</p>
                   <div className="flex flex-wrap gap-1">

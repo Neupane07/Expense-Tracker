@@ -16,6 +16,7 @@ describe('scoreSwingConfidence', () => {
     alreadyHeldHighExposure: false,
     marketRegimeRiskOff: false,
     hasFreshNewsOrFiling: false,
+    hasStaleResearch: false,
   };
 
   it('caps confidence for fallback price sources', () => {
@@ -46,5 +47,27 @@ describe('scoreSwingConfidence', () => {
 
     expect(result.confidenceScore).toBeLessThanOrEqual(6.5);
     expect(result.confidenceCapReason).toContain('EXISTING_HIGH_EXPOSURE');
+  });
+
+  it('caps confidence when research evidence is stale', () => {
+    const result = scoreSwingConfidence({
+      ...base,
+      hasStaleResearch: true,
+    });
+
+    expect(result.confidenceScore).toBeLessThanOrEqual(6.5);
+    expect(result.confidenceCapReason).toContain('STALE_RESEARCH_EVIDENCE');
+  });
+
+  it('caps confidence when fresh news or filing is missing', () => {
+    const result = scoreSwingConfidence({
+      ...base,
+      hasFreshNewsOrFiling: false,
+    });
+
+    expect(result.confidenceScore).toBeLessThanOrEqual(6.5);
+    expect(result.confidenceCapReason).toContain(
+      'NO_FRESH_NEWS_OR_FILING_CHECK',
+    );
   });
 });

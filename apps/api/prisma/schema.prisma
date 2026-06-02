@@ -83,6 +83,8 @@ model User {
   portfolioSnapshots      PortfolioSnapshot[]
   swingScanRuns           SwingScanRun[]
   tradeJournalEntries     TradeJournalEntry[]
+  researchItems           ResearchItem[]
+  researchSnapshots       ResearchSnapshot[]
   invitationsCreated      Invitation[]             @relation("InvitationCreator")
   invitationAccepted      Invitation?              @relation("InvitationAccepted")
   createdAt               DateTime                 @default(now())
@@ -528,6 +530,8 @@ model Instrument {
   dailyCandles        DailyCandle[]
   indicatorSnapshots  TechnicalIndicatorSnapshot[]
   dataQualityWarnings DataQualityWarning[]
+  researchItems       ResearchItem[]
+  researchSnapshots   ResearchSnapshot[]
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt
 
@@ -679,4 +683,91 @@ model TradeJournalEntry {
   @@index([userId, status])
   @@index([userId, symbol])
   @@index([userId, createdAt])
+}
+
+enum ResearchCategory {
+  RESULT
+  ORDER_WIN
+  CORPORATE_ACTION
+  REGULATORY
+  MANAGEMENT_COMMENTARY
+  SECTOR_NEWS
+  COMPANY_NEWS
+  USER_NOTE
+  RISK_FLAG
+  OTHER
+}
+
+enum ResearchImpact {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+  MIXED
+  UNKNOWN
+}
+
+model ResearchItem {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrumentId String?
+  instrument   Instrument?      @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  symbol       String
+  title        String
+  summary      String
+  category     ResearchCategory
+  impact       ResearchImpact
+  sourceType   String
+  sourceName   String
+  sourceUrl    String?
+  publishedAt  DateTime?
+  fetchedAt    DateTime         @default(now())
+  asOf         DateTime         @default(now())
+  confidence   Decimal          @default(0.8) @db.Decimal(5, 4)
+  rawPayload   Json?
+  evidence     ResearchEvidence[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([userId, symbol])
+  @@index([userId, symbol, category])
+  @@index([userId, symbol, impact])
+  @@index([instrumentId])
+}
+
+model ResearchEvidence {
+  id             String       @id @default(cuid())
+  researchItemId String
+  researchItem   ResearchItem @relation(fields: [researchItemId], references: [id], onDelete: Cascade)
+  label          String
+  value          String
+  unit           String?
+  evidenceDate   DateTime?
+  sourceUrl      String?
+  createdAt      DateTime     @default(now())
+
+  @@index([researchItemId])
+}
+
+model ResearchSnapshot {
+  id                String      @id @default(cuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrumentId      String?
+  instrument        Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  symbol            String
+  asOf              DateTime    @default(now())
+  latestEvidenceAt  DateTime?
+  hasFreshEvidence  Boolean     @default(false)
+  staleReason       String?
+  positiveCount     Int         @default(0)
+  negativeCount     Int         @default(0)
+  neutralCount      Int         @default(0)
+  riskFlags         Json        @default("[]")
+  summary           String
+  warnings          Json        @default("[]")
+  createdAt         DateTime    @default(now())
+
+  @@index([userId, symbol, createdAt])
+  @@index([instrumentId])
 }

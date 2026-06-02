@@ -15,6 +15,7 @@ export type ConfidenceInput = {
   alreadyHeldHighExposure: boolean;
   marketRegimeRiskOff: boolean;
   hasFreshNewsOrFiling: boolean;
+  hasStaleResearch?: boolean;
 };
 
 export type ConfidenceResult = {
@@ -48,6 +49,11 @@ export function scoreSwingConfidence(input: ConfidenceInput): ConfidenceResult {
   if (!input.hasFreshNewsOrFiling) {
     score = Math.min(score, 6.5);
     caps.push('NO_FRESH_NEWS_OR_FILING_CHECK');
+  }
+
+  if (input.hasStaleResearch) {
+    score = Math.min(score, 6.5);
+    caps.push('STALE_RESEARCH_EVIDENCE');
   }
 
   if (input.alreadyHeldHighExposure) {

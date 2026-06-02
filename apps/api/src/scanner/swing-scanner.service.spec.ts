@@ -49,6 +49,7 @@ describe('SwingScannerService', () => {
     candles?: unknown;
     indicators?: unknown;
     validation?: unknown;
+    researchStatus?: unknown;
   }) {
     const prisma = {
       brokerHoldingSnapshot: {
@@ -166,6 +167,19 @@ describe('SwingScannerService', () => {
     const riskSettings = {
       getSettings: jest.fn(() => DEFAULT_RISK_SETTINGS),
     };
+    const researchSnapshots = {
+      getScannerResearchStatus: jest.fn().mockResolvedValue(
+        overrides?.researchStatus ?? {
+          researchFreshness: 'missing',
+          latestResearchAt: null,
+          researchWarnings: ['RESEARCH_EVIDENCE_MISSING'],
+          evidenceCount: 0,
+          riskFlags: [],
+          hasFreshNewsOrFiling: false,
+          hasStaleResearch: false,
+        },
+      ),
+    };
 
     return {
       service: new SwingScannerService(
@@ -177,6 +191,7 @@ describe('SwingScannerService', () => {
         tradeValidation as never,
         exposure as never,
         riskSettings as never,
+        researchSnapshots as never,
       ),
       prisma,
       tradeValidation,
@@ -344,5 +359,52 @@ describe('SwingScannerService', () => {
     expect(candidate?.warnings).toEqual(
       expect.arrayContaining(['SYMBOL_ALREADY_HELD']),
     );
+  });
+
+  it('caps confidence when no fresh research exists', async () => {
+    const { service } = createService({
+      researchStatus: {
+        researchFreshness: 'missing',
+        latestResearchAt: null,
+        researchWarnings: ['RESEARCH_EVIDENCE_MISSING'],
+        evidenceCount: 0,
+        riskFlags: [],
+        hasFreshNewsOrFiling: false,
+        hasStaleResearch: false,
+      },
+    });
+
+    const result = await service.runScan('user-1', { symbols: ['INFY'] });
+    const candidate = result.candidates.find(
+      (row) => row.symbol === 'INFY' && row.rejectReasons.length === 0,
+    );
+
+    if (candidate) {
+      expect(candidate.confidenceCapReason).toContain(
+        'NO_FRESH_NEWS_OR_FILING_CHECK',
+      );
+      expect(candidate.researchFreshness).toBe('missing');
+    }
+  });
+
+  it('warns and caps confidence when research is stale', async () => {
+    const { service } = createService({
+      researchStatus: {
+        researchFreshness: 'stale',
+        latestResearchAt: '2025-01-01T00:00:00.000Z',
+        researchWarnings: ['STALE_RESEARCH_EVIDENCE'],
+        evidenceCount: 2,
+        riskFlags: ['Old result miss'],
+        hasFreshNewsOrFiling: false,
+        hasStaleResearch: true,
+      },
+    });
+
+    const result = await service.runScan('user-1', { symbols: ['INFY'] });
+    const candidate = result.candidates.find((row) => row.symbol === 'INFY');
+
+    expect(candidate?.researchWarnings).toContain('STALE_RESEARCH_EVIDENCE');
+    expect(candidate?.confidenceCapReason).toContain('STALE_RESEARCH_EVIDENCE');
+    expect(candidate?.researchFreshness).toBe('stale');
   });
 });
