@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { BrokerHoldingsQueryService } from '../broker/broker-holdings-query.service';
 import { BrokerService } from '../broker/broker.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
@@ -19,6 +20,7 @@ export class PortfolioService {
     private readonly brokerService: BrokerService,
     private readonly portfolioSnapshotService: PortfolioSnapshotService,
     private readonly mutualFundsService: MutualFundsService,
+    private readonly brokerHoldingsQuery: BrokerHoldingsQueryService,
   ) {}
 
   getStatus() {
@@ -47,19 +49,8 @@ export class PortfolioService {
   }
 
   async getHoldings(userId: string) {
-    const latest = await this.prisma.brokerHoldingSnapshot.aggregate({
-      where: { userId },
-      _max: { asOf: true },
-    });
-
-    if (!latest._max.asOf) {
-      return [];
-    }
-
-    const rows = await this.prisma.brokerHoldingSnapshot.findMany({
-      where: { userId, asOf: latest._max.asOf },
-      orderBy: { tradingSymbol: 'asc' },
-    });
+    const { holdings: rows } =
+      await this.brokerHoldingsQuery.findReconciledHoldings(userId);
 
     return rows.map((row) => ({
       id: row.id,
@@ -134,7 +125,11 @@ export class PortfolioService {
     return this.mutualFundsService.syncAmfiNav(userId);
   }
 
-  private decimalToNumber(value: DecimalLike | null | undefined) {
+  private decimalToNumber(value: DecimalLike | number | null | undefined) {
+    if (typeof value === 'number') {
+      return value;
+    }
+
     return value?.toNumber() ?? 0;
   }
 }

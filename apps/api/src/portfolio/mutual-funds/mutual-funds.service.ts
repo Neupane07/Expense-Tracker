@@ -238,13 +238,24 @@ export class MutualFundsService {
   private async fetchAmfiNavText() {
     const url =
       this.configService.get<string>('AMFI_NAV_URL')?.trim() ||
-      'https://www.amfiindia.com/spages/NAVAll.txt';
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'text/plain,*/*',
-        'User-Agent': 'FinanceOS/1.0',
-      },
-    });
+      'https://portal.amfiindia.com/spages/NAVAll.txt';
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          Accept: 'text/plain,*/*',
+          'User-Agent': 'FinanceOS/1.0',
+        },
+      });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : 'unknown network error';
+      throw new BadRequestException(
+        `AMFI NAV sync failed: unable to reach AMFI (${detail}). ` +
+          'Check outbound HTTPS from the API container and AMFI_NAV_URL.',
+      );
+    }
 
     if (!response.ok) {
       throw new BadRequestException(

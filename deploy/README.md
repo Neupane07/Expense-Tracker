@@ -172,6 +172,23 @@ Neither PostgreSQL nor either application service publishes a host port.
 Caddy reaches only `expense-web` and `expense-api` on the shared external
 network; PostgreSQL is available only on the private Compose network.
 
+## AMFI NAV Sync
+
+The API fetches NAV data from AMFI over outbound HTTPS. The legacy
+`www.amfiindia.com` hostname often redirects to `portal.amfiindia.com`, but
+some VPS networks cannot reach `www` while `portal` works. Set this in
+`.env`:
+
+```bash
+AMFI_NAV_URL=https://portal.amfiindia.com/spages/NAVAll.txt
+```
+
+Verify from the running API container:
+
+```bash
+docker compose exec api node -e "fetch('https://portal.amfiindia.com/spages/NAVAll.txt').then((r)=>console.log('status',r.status)).catch((e)=>console.error(e))"
+```
+
 ## Rollback
 
 The workflow publishes each image with both `latest` and its Git commit SHA.
