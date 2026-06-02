@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { BrokerHoldingsQueryService } from '../broker/broker-holdings-query.service';
 import { BrokerProvider, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllocationService } from './allocation.service';
@@ -14,10 +15,12 @@ export class PortfolioSnapshotService {
     private readonly prisma: PrismaService,
     private readonly allocationService: AllocationService,
     private readonly mutualFundsService: MutualFundsService,
+    private readonly brokerHoldingsQuery: BrokerHoldingsQueryService,
   ) {}
 
   async createSnapshotFromLatest(userId: string, syncRunId?: string) {
-    const holdings = await this.findHoldings(userId, syncRunId);
+    const { holdings, excludedCount } =
+      await this.brokerHoldingsQuery.findReconciledHoldings(userId, syncRunId);
     const fund = await this.findFund(userId, syncRunId);
     const mutualFunds = await this.mutualFundsService.getValuations(userId);
     const cashValue = this.decimalToNumber(fund?.availableBalance);
@@ -40,7 +43,7 @@ export class PortfolioSnapshotService {
         ? (Array.from(brokerAccountIds)[0] as string)
         : null;
     const warnings = [
-      ...this.buildWarnings(holdings.length, fund !== null),
+      ...this.buildWarnings(holdings.length, fund !== null, excludedCount),
       ...mutualFunds.warnings,
     ];
     const snapshot = await this.prisma.portfolioSnapshot.create({
@@ -85,37 +88,24 @@ export class PortfolioSnapshotService {
     };
   }
 
-  private async findHoldings(userId: string, syncRunId?: string) {
-    if (syncRunId) {
-      return this.prisma.brokerHoldingSnapshot.findMany({
-        where: { userId, syncRunId },
-        orderBy: { tradingSymbol: 'asc' },
-      });
+  private async findFund(userId: string, syncRunId?: string) {
+    const effectiveSyncRunId =
+      syncRunId ?? (await this.brokerHoldingsQuery.findLatestSyncRunId(userId));
+
+    if (!effectiveSyncRunId) {
+      return null;
     }
 
-    const latest = await this.prisma.brokerHoldingSnapshot.aggregate({
-      where: { userId },
-      _max: { asOf: true },
-    });
-
-    if (!latest._max.asOf) {
-      return [];
-    }
-
-    return this.prisma.brokerHoldingSnapshot.findMany({
-      where: { userId, asOf: latest._max.asOf },
-      orderBy: { tradingSymbol: 'asc' },
-    });
-  }
-
-  private findFund(userId: string, syncRunId?: string) {
     return this.prisma.brokerFundSnapshot.findFirst({
-      where: syncRunId ? { userId, syncRunId } : { userId },
-      orderBy: { asOf: 'desc' },
+      where: { userId, syncRunId: effectiveSyncRunId },
     });
   }
 
-  private buildWarnings(holdingCount: number, hasFundSnapshot: boolean) {
+  private buildWarnings(
+    holdingCount: number,
+    hasFundSnapshot: boolean,
+    excludedSoldHoldings = 0,
+  ) {
     const warnings: string[] = [];
 
     if (holdingCount === 0) {
@@ -123,6 +113,12 @@ export class PortfolioSnapshotService {
     } else {
       warnings.push(
         'Holding market values use Dhan average cost until market prices are added.',
+      );
+    }
+
+    if (excludedSoldHoldings > 0) {
+      warnings.push(
+        `${excludedSoldHoldings} holding(s) sold today were excluded because Dhan holdings lag same-day CNC sells.`,
       );
     }
 
