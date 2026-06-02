@@ -9,20 +9,29 @@ type QueryState<T> = {
 }
 
 export function useApiQuery<T>(path: string) {
+  const enabled = path.length > 0
   const [state, setState] = useState<QueryState<T>>({
     data: null,
     error: null,
-    isLoading: true,
+    isLoading: enabled,
     path,
   })
 
   const refetch = useCallback(async () => {
+    if (!enabled) {
+      return null
+    }
+
     const data = await apiGet<T>(path)
     setState({ data, error: null, isLoading: false, path })
     return data
-  }, [path])
+  }, [enabled, path])
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
     let isCurrent = true
 
     apiGet<T>(path)
@@ -45,11 +54,11 @@ export function useApiQuery<T>(path: string) {
     return () => {
       isCurrent = false
     }
-  }, [path])
+  }, [enabled, path])
 
   return {
     ...state,
-    isLoading: state.path !== path || state.isLoading,
+    isLoading: enabled ? state.path !== path || state.isLoading : false,
     refetch,
   }
 }

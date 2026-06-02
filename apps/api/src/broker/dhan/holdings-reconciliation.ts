@@ -133,10 +133,7 @@ function isDeliveryProduct(productType: string | null) {
   );
 }
 
-function isSameDayTradedDeliverySell(
-  order: ReconcilableOrder,
-  syncAsOf: Date,
-) {
+function isSameDayTradedDeliverySell(order: ReconcilableOrder, syncAsOf: Date) {
   if (!isTradedSellDelivery(order)) {
     return false;
   }
