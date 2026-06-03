@@ -126,6 +126,7 @@
     }
   html {
     @apply font-sans;
+    scrollbar-gutter: stable;
     }
   html, body, #root {
     min-height: 100%;

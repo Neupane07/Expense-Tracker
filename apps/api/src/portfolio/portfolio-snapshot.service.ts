@@ -3,6 +3,7 @@ import { BrokerHoldingsQueryService } from '../broker/broker-holdings-query.serv
 import { BrokerProvider, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllocationService } from './allocation.service';
+import { HoldingsValuationService } from './holdings-valuation.service';
 import { MutualFundsService } from './mutual-funds/mutual-funds.service';
 
 type DecimalLike = {
@@ -16,6 +17,7 @@ export class PortfolioSnapshotService {
     private readonly allocationService: AllocationService,
     private readonly mutualFundsService: MutualFundsService,
     private readonly brokerHoldingsQuery: BrokerHoldingsQueryService,
+    private readonly holdingsValuation: HoldingsValuationService,
   ) {}
 
   async createSnapshotFromLatest(userId: string, syncRunId?: string) {
@@ -24,14 +26,31 @@ export class PortfolioSnapshotService {
     const fund = await this.findFund(userId, syncRunId);
     const mutualFunds = await this.mutualFundsService.getValuations(userId);
     const cashValue = this.decimalToNumber(fund?.availableBalance);
-    const allocation = this.allocationService.calculateStockEtfCashAllocation(
+    const valuation = await this.holdingsValuation.value(
+      userId,
       holdings.map((holding) => ({
+        tradingSymbol: holding.tradingSymbol,
+        securityId: holding.securityId,
+        exchange: holding.exchange,
+        isin: holding.isin,
         assetClass: holding.assetClass,
-        marketValue: this.decimalToNumber(holding.marketValue),
+        totalQty: this.decimalToNumber(holding.totalQty),
+        costValue: this.decimalToNumber(holding.costValue),
+      })),
+    );
+    const allocation = this.allocationService.calculateStockEtfCashAllocation(
+      valuation.holdings.map((holding) => ({
+        assetClass: holding.assetClass as never,
+        marketValue: holding.currentValue,
       })),
       cashValue,
       mutualFunds.totalValue,
     );
+    const summary = this.buildSummary({
+      listed: valuation.summary,
+      mutualFunds,
+      cashValue,
+    });
     const brokerAccountIds = new Set(
       [
         ...holdings.map((holding) => holding.brokerAccountId),
@@ -44,6 +63,7 @@ export class PortfolioSnapshotService {
         : null;
     const warnings = [
       ...this.buildWarnings(holdings.length, fund !== null, excludedCount),
+      ...valuation.warnings,
       ...mutualFunds.warnings,
     ];
     const snapshot = await this.prisma.portfolioSnapshot.create({
@@ -76,6 +96,9 @@ export class PortfolioSnapshotService {
       snapshotTime: snapshot.snapshotTime,
       brokerAccountId: snapshot.brokerAccountId,
       allocation,
+      summary,
+      listedSummary: valuation.summary,
+      priceAsOf: valuation.priceAsOf,
       mutualFunds,
       warnings,
       source: {
@@ -85,6 +108,69 @@ export class PortfolioSnapshotService {
         fundSnapshotId: fund?.id ?? null,
         mutualFundHoldingCount: mutualFunds.holdings.length,
       },
+    };
+  }
+
+  private buildSummary(input: {
+    listed: import('./holdings-valuation.service').HoldingsValuationSummary;
+    mutualFunds: { totalValue: number; holdings: Array<{ costValue: number | null; pnl: number | null }> };
+    cashValue: number;
+  }) {
+    const listed = input.listed;
+    const mfInvested = input.mutualFunds.holdings.reduce(
+      (total, holding) => total + (holding.costValue ?? 0),
+      0,
+    );
+    const mfCurrentValue = input.mutualFunds.totalValue;
+    const mfPnlSum = input.mutualFunds.holdings.reduce(
+      (total, holding) => total + (holding.pnl ?? 0),
+      0,
+    );
+    const cash = roundMoney(input.cashValue);
+    const totalInvested = roundMoney(listed.invested + mfInvested + cash);
+    const totalCurrentValue = roundMoney(
+      listed.currentValue + mfCurrentValue + cash,
+    );
+    const totalPnl = roundMoney(totalCurrentValue - totalInvested);
+    const investedNonCash = totalInvested - cash;
+    const totalPnlPercent =
+      investedNonCash > 0
+        ? roundPercent((totalPnl / investedNonCash) * 100)
+        : null;
+
+    return {
+      totalInvested,
+      totalCurrentValue,
+      totalPnl,
+      totalPnlPercent,
+      dayPnl: listed.dayPnl,
+      dayPnlPercent: listed.dayPnlPercent,
+      listed: {
+        invested: listed.invested,
+        currentValue: listed.currentValue,
+        pnl: listed.pnl,
+        pnlPercent: listed.pnlPercent,
+        dayPnl: listed.dayPnl,
+        dayPnlPercent: listed.dayPnlPercent,
+        stockInvested: listed.stockInvested,
+        stockCurrentValue: listed.stockCurrentValue,
+        etfInvested: listed.etfInvested,
+        etfCurrentValue: listed.etfCurrentValue,
+        pricedCount: listed.pricedCount,
+        fallbackCount: listed.fallbackCount,
+        holdingCount: listed.holdingCount,
+      },
+      mutualFunds: {
+        invested: roundMoney(mfInvested),
+        currentValue: roundMoney(mfCurrentValue),
+        pnl: roundMoney(mfPnlSum),
+        pnlPercent:
+          mfInvested > 0
+            ? roundPercent((mfPnlSum / mfInvested) * 100)
+            : null,
+        holdingCount: input.mutualFunds.holdings.length,
+      },
+      cash,
     };
   }
 
@@ -110,10 +196,6 @@ export class PortfolioSnapshotService {
 
     if (holdingCount === 0) {
       warnings.push('No synced Dhan holdings are available.');
-    } else {
-      warnings.push(
-        'Holding market values use Dhan average cost until market prices are added.',
-      );
     }
 
     if (excludedSoldHoldings > 0) {
@@ -140,4 +222,12 @@ export class PortfolioSnapshotService {
   private toJson(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function roundPercent(value: number) {
+  return Math.round(value * 100) / 100;
 }

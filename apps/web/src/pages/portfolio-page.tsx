@@ -1,7 +1,10 @@
-import { type FormEvent, type ReactNode, useState } from "react"
+import { type FormEvent, type ReactNode, useMemo, useState } from "react"
 import {
+  ArrowDownRight,
+  ArrowUpRight,
   Calculator,
   DatabaseZap,
+  Minus,
   Pencil,
   RefreshCw,
   Save,
@@ -13,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -30,6 +34,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiDelete, apiGet, apiPatchJson, apiPostJson } from "@/lib/api-client"
+import { cn } from "@/lib/utils"
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent } from "@/lib/format"
 import { useApiQuery } from "@/lib/use-api-query"
 import { EmptyState, ErrorState, LoadingState } from "./page-state"
@@ -53,11 +58,50 @@ type Allocation = {
   cashPercent: number
 }
 
+type ListedSummary = {
+  invested: number
+  currentValue: number
+  pnl: number
+  pnlPercent: number | null
+  dayPnl: number | null
+  dayPnlPercent: number | null
+  stockInvested: number
+  stockCurrentValue: number
+  etfInvested: number
+  etfCurrentValue: number
+  pricedCount: number
+  fallbackCount: number
+  holdingCount: number
+}
+
+type MutualFundSummary = {
+  invested: number
+  currentValue: number
+  pnl: number
+  pnlPercent: number | null
+  holdingCount: number
+}
+
+type PortfolioSummary = {
+  totalInvested: number
+  totalCurrentValue: number
+  totalPnl: number
+  totalPnlPercent: number | null
+  dayPnl: number | null
+  dayPnlPercent: number | null
+  listed: ListedSummary
+  mutualFunds: MutualFundSummary
+  cash: number
+}
+
 type PortfolioSnapshot = {
   id: string
   snapshotTime: string
   brokerAccountId: string | null
   allocation: Allocation
+  summary: PortfolioSummary
+  listedSummary: ListedSummary
+  priceAsOf: string | null
   mutualFunds: MutualFundsResponse
   warnings: string[]
   source: {
@@ -82,6 +126,25 @@ type Holding = {
   avgCostPrice: number
   costValue: number
   marketValue: number
+  ltp: number | null
+  previousClose: number | null
+  investedValue: number
+  currentValue: number
+  pnl: number
+  pnlPercent: number | null
+  dayPnl: number | null
+  dayPnlPercent: number | null
+  priceSource: string | null
+  priceTimestamp: string | null
+  priceFreshness: "LIVE" | "RECENT" | "STALE" | "MISSING" | "FALLBACK"
+  warnings: string[]
+}
+
+type HoldingsResponse = {
+  holdings: Holding[]
+  summary: ListedSummary
+  priceAsOf: string | null
+  warnings: string[]
 }
 
 type Order = {
@@ -116,7 +179,8 @@ type MutualFundHolding = {
   navDate: string | null
   navSource: string | null
   currentValue: number
-  pnl: number
+  pnl: number | null
+  pnlPercent: number | null
   warnings?: string[]
 }
 
@@ -124,6 +188,9 @@ type MutualFundsResponse = {
   asOf: string
   holdings: MutualFundHolding[]
   totalValue: number
+  totalInvested: number
+  totalPnl: number
+  totalPnlPercent: number | null
   warnings: string[]
 }
 
@@ -381,7 +448,7 @@ export function PortfolioPage() {
   const snapshotQuery = useApiQuery<PortfolioSnapshot>(
     `/portfolio/snapshot?refresh=${refreshKey}`,
   )
-  const holdingsQuery = useApiQuery<Holding[]>(
+  const holdingsQuery = useApiQuery<HoldingsResponse>(
     `/portfolio/holdings?refresh=${refreshKey}`,
   )
   const ordersQuery = useApiQuery<Order[]>(`/portfolio/orders?refresh=${refreshKey}`)
@@ -406,32 +473,32 @@ export function PortfolioPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <Card>
-        <CardHeader className="gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle>Portfolio</CardTitle>
-            <CardDescription>
-              Read-only broker, mutual fund, market-data, and risk workspace.
-            </CardDescription>
-          </div>
-          <Button onClick={syncDhan} disabled={isSyncing}>
-            <RefreshCw className={isSyncing ? "size-4 animate-spin" : "size-4"} />
-            {isSyncing ? "Syncing Dhan" : "Sync Dhan"}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Read-only workspace for broker, mutual fund, market data, and risk.
+        </p>
+        <div className="flex items-center gap-3">
+          {syncMessage ? (
+            <span className="text-xs text-emerald-600 dark:text-emerald-400">{syncMessage}</span>
+          ) : null}
+          {syncError ? (
+            <span className="text-xs text-destructive">{syncError}</span>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={syncDhan}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={isSyncing ? "animate-spin" : undefined} />
+            {isSyncing ? "Syncing Dhan…" : "Sync Dhan"}
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Broker operations here are read-only. Saved Dhan secrets stay behind the
-            API boundary.
-          </p>
-          {syncMessage ? <SuccessBanner message={syncMessage} /> : null}
-          {syncError ? <ErrorState message={syncError} /> : null}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Tabs defaultValue="holdings" className="space-y-4">
-        <TabsList className="flex w-full justify-start overflow-x-auto">
+        <TabsList className="flex w-full justify-start overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
           <TabsTrigger value="holdings">Holdings</TabsTrigger>
           <TabsTrigger value="mutual-funds">Mutual Funds</TabsTrigger>
           <TabsTrigger value="market-data">Market Data</TabsTrigger>
@@ -465,9 +532,19 @@ function HoldingsSection({
   ordersQuery,
 }: {
   snapshotQuery: ReturnType<typeof useApiQuery<PortfolioSnapshot>>
-  holdingsQuery: ReturnType<typeof useApiQuery<Holding[]>>
+  holdingsQuery: ReturnType<typeof useApiQuery<HoldingsResponse>>
   ordersQuery: ReturnType<typeof useApiQuery<Order[]>>
 }) {
+  const [assetFilter, setAssetFilter] = useState<"ALL" | "STOCK" | "ETF">("ALL")
+
+  const filteredHoldings = useMemo(() => {
+    const rows = holdingsQuery.data?.holdings ?? []
+    if (assetFilter === "ALL") return rows
+    return rows.filter((row) => row.assetClass === assetFilter)
+  }, [holdingsQuery.data, assetFilter])
+
+  const filteredTotals = useMemo(() => sumHoldings(filteredHoldings), [filteredHoldings])
+
   if (snapshotQuery.isLoading || holdingsQuery.isLoading || ordersQuery.isLoading) {
     return <LoadingState message="Loading portfolio snapshot" />
   }
@@ -491,55 +568,49 @@ function HoldingsSection({
 
   const snapshot = snapshotQuery.data
   const allocation = snapshot.allocation
+  const summary = snapshot.summary
+  const listed = summary.listed
+  const allHoldings = holdingsQuery.data.holdings
+  const stockCount = allHoldings.filter((row) => row.assetClass === "STOCK").length
+  const etfCount = allHoldings.filter((row) => row.assetClass === "ETF").length
+  const priceAsOf = holdingsQuery.data.priceAsOf ?? snapshot.priceAsOf
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total value" value={formatMoney(allocation.totalValue)} />
-        <MetricCard label="Cash" value={formatMoney(allocation.cashValue)} />
-        <MetricCard label="Stock + ETF" value={formatMoney(allocation.stockValue + allocation.etfValue)} />
-        <MetricCard label="Mutual funds" value={formatMoney(allocation.mutualFundValue)} />
-      </div>
+      <PortfolioHeroCard
+        snapshot={snapshot}
+        priceAsOf={priceAsOf}
+      />
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Allocation</CardTitle>
-            <CardDescription>
-              Snapshot as of {formatDateTime(snapshot.snapshotTime)} from {snapshot.source.brokerProvider}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <AllocationRow label="Stocks" amount={allocation.stockValue} percent={allocation.stockPercent} />
-            <AllocationRow label="ETF" amount={allocation.etfValue} percent={allocation.etfPercent} />
-            <AllocationRow label="Mutual funds" amount={allocation.mutualFundValue} percent={allocation.mutualFundPercent} />
-            <AllocationRow label="Cash" amount={allocation.cashValue} percent={allocation.cashPercent} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Freshness</CardTitle>
-            <CardDescription>
-              Broker holdings: {snapshot.source.holdingCount}; MF holdings: {snapshot.source.mutualFundHoldingCount}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <FreshnessBadge warnings={snapshot.warnings} />
-            <WarningsList warnings={snapshot.warnings} />
-            <KeyValue label="Broker account" value={snapshot.brokerAccountId ?? "Not available"} />
-            <KeyValue label="Sync run" value={snapshot.source.syncRunId ?? "Latest stored data"} />
-          </CardContent>
-        </Card>
+      <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+        <AllocationCard allocation={allocation} snapshot={snapshot} />
+        <FreshnessCard
+          snapshot={snapshot}
+          listed={listed}
+          priceAsOf={priceAsOf}
+        />
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Holdings</CardTitle>
-          <CardDescription>Latest synced broker holdings.</CardDescription>
+          <CardDescription>
+            Live valuation by {holdingsQuery.data.holdings[0]?.priceSource ?? "DHAN"}.
+          </CardDescription>
+          <CardAction>
+            <AssetClassFilter
+              value={assetFilter}
+              onChange={setAssetFilter}
+              counts={{
+                ALL: allHoldings.length,
+                STOCK: stockCount,
+                ETF: etfCount,
+              }}
+            />
+          </CardAction>
         </CardHeader>
         <CardContent>
-          {holdingsQuery.data.length === 0 ? (
+          {allHoldings.length === 0 ? (
             <EmptyState message="No synced Dhan holdings are available." />
           ) : (
             <TableScroll>
@@ -548,35 +619,97 @@ function HoldingsSection({
                   <TableRow>
                     <TableHead>Symbol</TableHead>
                     <TableHead>Asset</TableHead>
-                    <TableHead>Exchange</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead className="text-right">Avg cost</TableHead>
-                    <TableHead className="text-right">Cost</TableHead>
-                    <TableHead className="text-right">Value</TableHead>
+                    <TableHead className="text-right">LTP</TableHead>
+                    <TableHead className="text-right">Investment</TableHead>
+                    <TableHead className="text-right">Current value</TableHead>
+                    <TableHead className="text-right">P&amp;L</TableHead>
+                    <TableHead className="text-right">P&amp;L %</TableHead>
                     <TableHead>As of</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {holdingsQuery.data.map((holding) => (
+                  {filteredHoldings.map((holding) => (
                     <TableRow key={holding.id}>
                       <TableCell className="font-medium">
-                        {holding.tradingSymbol}
-                        {!holding.securityId ? (
-                          <Badge variant="outline" className="ml-2">
-                            unmapped
-                          </Badge>
-                        ) : null}
+                        <div className="flex flex-col gap-1">
+                          <span>{holding.tradingSymbol}</span>
+                          <div className="flex flex-wrap gap-1">
+                            {holding.exchange ? (
+                              <Badge variant="outline" className="text-[10px] uppercase">
+                                {holding.exchange}
+                              </Badge>
+                            ) : null}
+                            {holding.priceFreshness === "FALLBACK" ||
+                            holding.priceFreshness === "STALE" ? (
+                              <Badge variant="outline" className="text-[10px] uppercase">
+                                {holding.priceFreshness === "STALE"
+                                  ? "stale price"
+                                  : "no live price"}
+                              </Badge>
+                            ) : null}
+                            {!holding.securityId ? (
+                              <Badge variant="outline" className="text-[10px] uppercase">
+                                unmapped
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>{holding.assetClass}</TableCell>
-                      <TableCell>{holding.exchange ?? "-"}</TableCell>
                       <TableCell className="text-right">{formatNumber(holding.totalQty)}</TableCell>
                       <TableCell className="text-right">{formatMoney(holding.avgCostPrice)}</TableCell>
-                      <TableCell className="text-right">{formatMoney(holding.costValue)}</TableCell>
-                      <TableCell className="text-right">{formatMoney(holding.marketValue)}</TableCell>
-                      <TableCell>{formatDateTime(holding.asOf)}</TableCell>
+                      <TableCell className="text-right">
+                        {holding.ltp == null ? "-" : formatMoney(holding.ltp)}
+                      </TableCell>
+                      <TableCell className="text-right">{formatMoney(holding.investedValue)}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatMoney(holding.currentValue)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <PnlText
+                          value={
+                            holding.priceFreshness === "FALLBACK"
+                              ? null
+                              : holding.pnl
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <PnlText
+                          value={
+                            holding.priceFreshness === "FALLBACK"
+                              ? null
+                              : holding.pnlPercent
+                          }
+                          format="percent"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {formatDateTime(holding.priceTimestamp ?? holding.asOf)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
+                {filteredHoldings.length > 0 ? (
+                  <tfoot className="border-t border-border bg-muted/40">
+                    <TableRow>
+                      <TableCell className="text-xs font-medium uppercase tracking-wide text-muted-foreground" colSpan={5}>
+                        Totals ({filteredHoldings.length} {assetFilter === "ALL" ? "holdings" : assetFilter.toLowerCase()})
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatMoney(filteredTotals.invested)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatMoney(filteredTotals.currentValue)}</TableCell>
+                      <TableCell className="text-right">
+                        <PnlText value={filteredTotals.pnl} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <PnlText value={filteredTotals.pnlPercent} format="percent" />
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </tfoot>
+                ) : null}
               </Table>
             </TableScroll>
           )}
@@ -833,10 +966,24 @@ function MutualFundsSection({
           {mutualFundsQuery.error ? <ErrorState message={mutualFundsQuery.error} /> : null}
           {mutualFundsQuery.data ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Investment" value={formatMoney(mutualFundsQuery.data.totalInvested)} />
                 <MetricCard label="Current value" value={formatMoney(mutualFundsQuery.data.totalValue)} />
-                <MetricCard label="Holdings" value={String(mutualFundsQuery.data.holdings.length)} />
-                <MetricCard label="As of" value={formatDateTime(mutualFundsQuery.data.asOf)} />
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Overall P&L
+                  </p>
+                  <div className="mt-1">
+                    <PnlText value={mutualFundsQuery.data.totalPnl} size="hero" />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <PnlText value={mutualFundsQuery.data.totalPnlPercent} format="percent" size="caption" />
+                  </div>
+                </div>
+                <MetricCard
+                  label="Holdings"
+                  value={`${mutualFundsQuery.data.holdings.length} · ${formatDateTime(mutualFundsQuery.data.asOf)}`}
+                />
               </div>
               <WarningsList warnings={mutualFundsQuery.data.warnings} />
               {mutualFundsQuery.data.holdings.length === 0 ? (
@@ -851,9 +998,10 @@ function MutualFundsSection({
                         <TableHead className="text-right">Units</TableHead>
                         <TableHead className="text-right">NAV</TableHead>
                         <TableHead>NAV date</TableHead>
-                        <TableHead className="text-right">Cost</TableHead>
-                        <TableHead className="text-right">Value</TableHead>
+                        <TableHead className="text-right">Investment</TableHead>
+                        <TableHead className="text-right">Current value</TableHead>
                         <TableHead className="text-right">P&L</TableHead>
+                        <TableHead className="text-right">P&L %</TableHead>
                         <TableHead>Warnings</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -867,8 +1015,13 @@ function MutualFundsSection({
                           <TableCell className="text-right">{formatNumber(holding.nav)}</TableCell>
                           <TableCell>{formatDate(holding.navDate)}</TableCell>
                           <TableCell className="text-right">{formatMoney(holding.costValue)}</TableCell>
-                          <TableCell className="text-right">{formatMoney(holding.currentValue)}</TableCell>
-                          <TableCell className="text-right">{formatMoney(holding.pnl)}</TableCell>
+                          <TableCell className="text-right font-medium">{formatMoney(holding.currentValue)}</TableCell>
+                          <TableCell className="text-right">
+                            <PnlText value={holding.pnl} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <PnlText value={holding.pnlPercent} format="percent" />
+                          </TableCell>
                           <TableCell>
                             <InlineWarnings warnings={holding.warnings} />
                           </TableCell>
@@ -1490,31 +1643,450 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-function AllocationRow({
-  label,
-  amount,
-  percent,
-}: {
+type AllocationSlice = {
+  key: string
   label: string
   amount: number
   percent: number
+  barClassName: string
+  dotClassName: string
+}
+
+function buildAllocationSlices(allocation: Allocation): AllocationSlice[] {
+  return [
+    {
+      key: "stocks",
+      label: "Stocks",
+      amount: allocation.stockValue,
+      percent: allocation.stockPercent,
+      barClassName: "bg-sky-500 dark:bg-sky-400",
+      dotClassName: "bg-sky-500 dark:bg-sky-400",
+    },
+    {
+      key: "etf",
+      label: "ETF",
+      amount: allocation.etfValue,
+      percent: allocation.etfPercent,
+      barClassName: "bg-amber-500 dark:bg-amber-400",
+      dotClassName: "bg-amber-500 dark:bg-amber-400",
+    },
+    {
+      key: "mutualFunds",
+      label: "Mutual funds",
+      amount: allocation.mutualFundValue,
+      percent: allocation.mutualFundPercent,
+      barClassName: "bg-violet-500 dark:bg-violet-400",
+      dotClassName: "bg-violet-500 dark:bg-violet-400",
+    },
+    {
+      key: "cash",
+      label: "Cash",
+      amount: allocation.cashValue,
+      percent: allocation.cashPercent,
+      barClassName: "bg-emerald-500 dark:bg-emerald-400",
+      dotClassName: "bg-emerald-500 dark:bg-emerald-400",
+    },
+  ]
+}
+
+function AllocationCard({
+  allocation,
+  snapshot,
+}: {
+  allocation: Allocation
+  snapshot: PortfolioSnapshot
 }) {
+  const slices = buildAllocationSlices(allocation)
+  const visibleSlices = slices.filter((slice) => slice.amount > 0)
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium">{label}</span>
-        <span className="text-muted-foreground">
-          {formatMoney(amount)} / {formatPercent(percent)}
-        </span>
-      </div>
-      <div className="h-2 rounded-sm bg-muted">
+    <Card>
+      <CardHeader>
+        <CardTitle>Allocation</CardTitle>
+        <CardDescription>
+          Snapshot {formatDateTime(snapshot.snapshotTime)} · {snapshot.source.brokerProvider}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <StackedAllocationBar slices={visibleSlices} />
+        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          {slices.map((slice) => (
+            <div key={slice.key} className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={cn("size-2.5 shrink-0 rounded-full", slice.dotClassName)} />
+                <span className="truncate text-sm font-medium">{slice.label}</span>
+              </div>
+              <div className="text-right tabular-nums">
+                <p className="text-sm font-medium">{formatMoney(slice.amount)}</p>
+                <p className="text-xs text-muted-foreground">{formatPercent(slice.percent)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function StackedAllocationBar({ slices }: { slices: AllocationSlice[] }) {
+  if (slices.length === 0) {
+    return <div className="h-2.5 rounded-full bg-muted" />
+  }
+
+  return (
+    <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+      {slices.map((slice) => (
         <div
-          className="h-2 rounded-sm bg-primary"
-          style={{ width: `${Math.min(Math.max(percent, 0), 100)}%` }}
+          key={slice.key}
+          className={cn("h-2.5 first:rounded-l-full last:rounded-r-full", slice.barClassName)}
+          style={{ width: `${Math.min(Math.max(slice.percent, 0), 100)}%` }}
+          title={`${slice.label} ${formatPercent(slice.percent)}`}
         />
+      ))}
+    </div>
+  )
+}
+
+function FreshnessCard({
+  snapshot,
+  listed,
+  priceAsOf,
+}: {
+  snapshot: PortfolioSnapshot
+  listed: ListedSummary
+  priceAsOf: string | null
+}) {
+  const livePrices = listed.pricedCount
+  const totalListed = listed.holdingCount
+  const allLive = totalListed > 0 && listed.fallbackCount === 0
+  const someStale = livePrices > 0 && listed.fallbackCount > 0
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle>Data Freshness</CardTitle>
+        <CardDescription>How recent each value is.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <FreshnessRow
+          label="Listed prices"
+          value={
+            totalListed === 0
+              ? "No holdings"
+              : `${livePrices}/${totalListed} live`
+          }
+          tone={allLive ? "positive" : someStale ? "warning" : "neutral"}
+          subtext={priceAsOf ? formatDateTime(priceAsOf) : "Average cost fallback"}
+        />
+        <FreshnessRow
+          label="Mutual funds"
+          value={
+            snapshot.source.mutualFundHoldingCount > 0
+              ? `${snapshot.source.mutualFundHoldingCount} holdings`
+              : "Not configured"
+          }
+          tone="neutral"
+          subtext={`AMFI NAV · ${formatDate(snapshot.mutualFunds.asOf)}`}
+        />
+        <FreshnessRow
+          label="Broker"
+          value={snapshot.brokerAccountId ?? "Not connected"}
+          tone="neutral"
+          subtext={snapshot.source.syncRunId ? "Synced just now" : "Latest stored sync"}
+        />
+        {snapshot.warnings.length > 0 ? (
+          <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+            <p className="mb-1 font-medium uppercase tracking-wide text-[10px]">
+              Warnings
+            </p>
+            <ul className="space-y-1">
+              {snapshot.warnings.map((warning) => (
+                <li key={warning} className="leading-snug">
+                  · {warning}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+function FreshnessRow({
+  label,
+  value,
+  subtext,
+  tone,
+}: {
+  label: string
+  value: string
+  subtext?: string
+  tone: "positive" | "warning" | "neutral"
+}) {
+  const dotClass =
+    tone === "positive"
+      ? "bg-emerald-500 dark:bg-emerald-400"
+      : tone === "warning"
+        ? "bg-amber-500 dark:bg-amber-400"
+        : "bg-muted-foreground/40"
+
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-0.5 truncate text-sm font-medium">{value}</p>
+      </div>
+      <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+        {subtext ? <span className="truncate text-right">{subtext}</span> : null}
+        <span className={cn("size-2 shrink-0 rounded-full", dotClass)} />
       </div>
     </div>
   )
+}
+
+function PortfolioHeroCard({
+  snapshot,
+  priceAsOf,
+}: {
+  snapshot: PortfolioSnapshot
+  priceAsOf: string | null
+}) {
+  const summary = snapshot.summary
+  const overallSign = signOf(summary.totalPnl)
+  const daySign = signOf(summary.dayPnl ?? 0)
+  const dayAvailable = summary.dayPnl != null
+  const gradient =
+    overallSign === "positive"
+      ? "from-emerald-500/10"
+      : overallSign === "negative"
+        ? "from-rose-500/10"
+        : "from-muted/40"
+
+  return (
+    <Card className={cn("overflow-hidden bg-gradient-to-br via-transparent to-transparent", gradient)}>
+      <CardContent className="grid gap-6 px-5 py-5 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:items-center">
+        <div className="flex flex-col gap-3 md:border-r md:border-border/60 md:pr-6">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Total value
+            </p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
+              {formatMoney(summary.totalCurrentValue)}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <PnlPill value={summary.totalPnl} percent={summary.totalPnlPercent} />
+            <span className="text-xs text-muted-foreground">
+              {priceAsOf
+                ? `Priced ${formatDateTime(priceAsOf)}`
+                : `Snapshot ${formatDateTime(snapshot.snapshotTime)}`}
+            </span>
+          </div>
+        </div>
+        <HeroStat
+          label="Investment"
+          value={formatMoney(summary.totalInvested)}
+          subtext={`${summary.listed.holdingCount} listed · ${summary.mutualFunds.holdingCount} MF`}
+        />
+        <HeroStat
+          label="Today's P&L"
+          value={
+            dayAvailable ? (
+              <PnlText value={summary.dayPnl} size="hero" sign={daySign} />
+            ) : (
+              <span className="text-2xl font-semibold tracking-tight text-muted-foreground">
+                —
+              </span>
+            )
+          }
+          subtext={
+            dayAvailable ? (
+              <PnlText
+                value={summary.dayPnlPercent}
+                format="percent"
+                size="caption"
+                sign={daySign}
+              />
+            ) : (
+              "Live quotes unavailable"
+            )
+          }
+        />
+        <HeroStat
+          label="Cash"
+          value={formatMoney(summary.cash)}
+          subtext={`${formatPercent(snapshot.allocation.cashPercent)} of portfolio`}
+        />
+      </CardContent>
+    </Card>
+  )
+}
+
+function HeroStat({
+  label,
+  value,
+  subtext,
+}: {
+  label: string
+  value: ReactNode
+  subtext?: ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <div className="text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {subtext ? (
+        <div className="text-xs text-muted-foreground">{subtext}</div>
+      ) : null}
+    </div>
+  )
+}
+
+function PnlPill({
+  value,
+  percent,
+}: {
+  value: number
+  percent: number | null
+}) {
+  const sign = signOf(value)
+  const colorClass =
+    sign === "positive"
+      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+      : sign === "negative"
+        ? "bg-destructive/10 text-destructive"
+        : "bg-muted text-muted-foreground"
+  const Icon =
+    sign === "positive" ? ArrowUpRight : sign === "negative" ? ArrowDownRight : Minus
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums",
+        colorClass,
+      )}
+    >
+      <Icon className="size-3" />
+      {formatSignedMoney(value)}
+      {percent != null ? <span className="opacity-80">({formatSignedPercent(percent)})</span> : null}
+    </span>
+  )
+}
+
+function AssetClassFilter({
+  value,
+  onChange,
+  counts,
+}: {
+  value: "ALL" | "STOCK" | "ETF"
+  onChange: (next: "ALL" | "STOCK" | "ETF") => void
+  counts: { ALL: number; STOCK: number; ETF: number }
+}) {
+  const options: Array<{ key: "ALL" | "STOCK" | "ETF"; label: string }> = [
+    { key: "ALL", label: "All" },
+    { key: "STOCK", label: "Stocks" },
+    { key: "ETF", label: "ETFs" },
+  ]
+
+  return (
+    <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          onClick={() => onChange(option.key)}
+          className={cn(
+            "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+            value === option.key
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option.label}
+          <span className="ml-1 text-muted-foreground">{counts[option.key]}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function PnlText({
+  value,
+  format = "money",
+  size = "default",
+  sign,
+}: {
+  value: number | null | undefined
+  format?: "money" | "percent"
+  size?: "default" | "hero" | "caption"
+  sign?: "positive" | "negative" | "neutral"
+}) {
+  if (value == null) {
+    return <span className="text-muted-foreground">-</span>
+  }
+
+  const resolvedSign = sign ?? signOf(value)
+  const colorClass =
+    resolvedSign === "positive"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : resolvedSign === "negative"
+        ? "text-destructive"
+        : "text-muted-foreground"
+  const sizeClass =
+    size === "hero" ? "text-2xl font-semibold tracking-tight" : size === "caption" ? "text-xs" : "text-sm font-medium"
+  const Icon =
+    resolvedSign === "positive"
+      ? ArrowUpRight
+      : resolvedSign === "negative"
+        ? ArrowDownRight
+        : Minus
+  const formatted =
+    format === "percent"
+      ? formatSignedPercent(value)
+      : formatSignedMoney(value)
+
+  return (
+    <span className={cn("inline-flex items-center gap-1 tabular-nums", colorClass, sizeClass)}>
+      {size !== "caption" ? <Icon className="size-3.5" /> : null}
+      {formatted}
+    </span>
+  )
+}
+
+function signOf(value: number | null | undefined): "positive" | "negative" | "neutral" {
+  if (value == null || value === 0) return "neutral"
+  return value > 0 ? "positive" : "negative"
+}
+
+function formatSignedMoney(value: number) {
+  const sign = value > 0 ? "+" : ""
+  return `${sign}${formatMoney(value)}`
+}
+
+function formatSignedPercent(value: number) {
+  const sign = value > 0 ? "+" : ""
+  return `${sign}${formatPercent(value)}`
+}
+
+function sumHoldings(rows: Holding[]) {
+  let invested = 0
+  let currentValue = 0
+  let pnl = 0
+
+  for (const row of rows) {
+    invested += row.investedValue
+    currentValue += row.currentValue
+    pnl += row.pnl
+  }
+
+  const pnlPercent = invested > 0 ? (pnl / invested) * 100 : null
+
+  return { invested, currentValue, pnl, pnlPercent }
 }
 
 function Field({
@@ -1639,18 +2211,6 @@ function DataQualityPanel({
       </div>
       <WarningsList warnings={warnings} />
     </div>
-  )
-}
-
-function FreshnessBadge({ warnings }: { warnings: string[] }) {
-  const hasMissing = warnings.some((warning) => warning.includes("No ") || warning.includes("MISSING"))
-  const hasFallback = warnings.some((warning) => warning.includes("fallback") || warning.includes("FALLBACK"))
-  const label = hasMissing ? "Missing data" : hasFallback ? "Fallback data" : "Latest stored"
-
-  return (
-    <Badge variant={hasMissing ? "destructive" : hasFallback ? "outline" : "default"}>
-      {label}
-    </Badge>
   )
 }
 

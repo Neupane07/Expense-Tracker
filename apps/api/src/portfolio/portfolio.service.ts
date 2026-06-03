@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BrokerHoldingsQueryService } from '../broker/broker-holdings-query.service';
 import { BrokerService } from '../broker/broker.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { HoldingsValuationService } from './holdings-valuation.service';
 import type {
   CreateMutualFundHoldingInput,
   UpdateMutualFundHoldingInput,
@@ -21,6 +22,7 @@ export class PortfolioService {
     private readonly portfolioSnapshotService: PortfolioSnapshotService,
     private readonly mutualFundsService: MutualFundsService,
     private readonly brokerHoldingsQuery: BrokerHoldingsQueryService,
+    private readonly holdingsValuation: HoldingsValuationService,
   ) {}
 
   getStatus() {
@@ -52,7 +54,7 @@ export class PortfolioService {
     const { holdings: rows } =
       await this.brokerHoldingsQuery.findReconciledHoldings(userId);
 
-    return rows.map((row) => ({
+    const baseHoldings = rows.map((row) => ({
       id: row.id,
       asOf: row.asOf,
       brokerAccountId: row.brokerAccountId,
@@ -65,9 +67,17 @@ export class PortfolioService {
       availableQty: this.decimalToNumber(row.availableQty),
       avgCostPrice: this.decimalToNumber(row.avgCostPrice),
       costValue: this.decimalToNumber(row.costValue),
-      marketValue: this.decimalToNumber(row.marketValue),
       rawPayload: row.rawPayload,
     }));
+
+    const valuation = await this.holdingsValuation.value(userId, baseHoldings);
+
+    return {
+      holdings: valuation.holdings,
+      summary: valuation.summary,
+      priceAsOf: valuation.priceAsOf,
+      warnings: valuation.warnings,
+    };
   }
 
   async getOrders(userId: string) {
