@@ -79,6 +79,25 @@ A point-in-time calculated view of:
 - open positions
 - data quality warnings
 
+### Listed Holdings Valuation
+
+`HoldingsValuationService` enriches reconciled broker holdings with live prices
+fetched from `DhanMarketDataProviderService.fetchLatestPricesBulk`. For each
+holding it computes `investedValue` (cost), `currentValue` (`qty * ltp`),
+`pnl`, `pnlPercent`, and (when previous close is available) `dayPnl` and
+`dayPnlPercent`. Stored `PriceSnapshot` rows under five minutes old are reused
+to avoid spamming Dhan; older or missing prices trigger a single bulk
+`/marketfeed/quote` call grouped by exchange segment. When live prices are
+unavailable the service falls back to average cost and emits a warning instead
+of silently masking the gap.
+
+`GET /portfolio/snapshot` now returns a top-level `summary` object with
+`totalInvested`, `totalCurrentValue`, `totalPnl`, `totalPnlPercent`, optional
+day P&L, plus per-bucket aggregates for `listed`, `mutualFunds`, and `cash`.
+`GET /portfolio/holdings` returns `{ holdings, summary, priceAsOf, warnings }`
+with the same per-holding valuation fields. Allocation percentages now use
+current values, not cost.
+
 ### Mutual Fund Holding
 
 MF ownership may be imported manually initially.

@@ -126,17 +126,24 @@ export function valueMutualFundHolding(
     nav && costValue > 0 ? roundMoney(currentValue - costValue) : null;
   const stale = nav ? isNavStale(nav.navDate, asOf) : false;
 
+  const investedValue = costValue > 0 ? roundMoney(costValue) : null;
+  const pnlPercent =
+    pnl !== null && investedValue && investedValue > 0
+      ? roundPercent((pnl / investedValue) * 100)
+      : null;
+
   return {
     schemeCode: holding.schemeCode ?? nav?.schemeCode ?? null,
     schemeName: holding.schemeName,
     units: holding.units,
     avgCostNav: holding.avgCostNav ?? null,
-    costValue: costValue > 0 ? roundMoney(costValue) : null,
+    costValue: investedValue,
     nav: nav?.nav ?? null,
     navDate: nav?.navDate ?? null,
     navSource: nav?.source ?? null,
     currentValue,
     pnl,
+    pnlPercent,
     stale,
   };
 }
@@ -224,5 +231,9 @@ function parseAmfiDate(value: string) {
 }
 
 function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function roundPercent(value: number) {
   return Math.round(value * 100) / 100;
 }

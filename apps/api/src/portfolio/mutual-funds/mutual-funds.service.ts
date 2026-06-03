@@ -222,15 +222,30 @@ export class MutualFundsService {
       };
     });
 
+    const totalCurrentValue = valuations.reduce(
+      (total, valuation) => total + valuation.currentValue,
+      0,
+    );
+    const totalInvested = valuations.reduce(
+      (total, valuation) => total + (valuation.costValue ?? 0),
+      0,
+    );
+    const totalPnl = valuations.reduce(
+      (total, valuation) => total + (valuation.pnl ?? 0),
+      0,
+    );
+    const totalPnlPercent =
+      totalInvested > 0
+        ? Math.round((totalPnl / totalInvested) * 10000) / 100
+        : null;
+
     return {
       asOf,
       holdings: valuations,
-      totalValue: roundMoney(
-        valuations.reduce(
-          (total, valuation) => total + valuation.currentValue,
-          0,
-        ),
-      ),
+      totalValue: roundMoney(totalCurrentValue),
+      totalInvested: roundMoney(totalInvested),
+      totalPnl: roundMoney(totalPnl),
+      totalPnlPercent,
       warnings: buildMutualFundWarnings(valuations),
     };
   }

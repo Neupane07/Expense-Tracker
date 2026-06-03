@@ -51,6 +51,29 @@ export class DhanClient {
     });
   }
 
+  async getMarketQuotes(
+    userId: string,
+    securityIdsBySegment: Record<string, string[]>,
+  ) {
+    const body: Record<string, number[]> = {};
+
+    for (const [segment, ids] of Object.entries(securityIdsBySegment)) {
+      const numericIds = ids
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+      if (numericIds.length > 0) {
+        body[segment] = numericIds;
+      }
+    }
+
+    if (Object.keys(body).length === 0) {
+      return { data: {} } satisfies DhanQuoteResponse;
+    }
+
+    return this.postJson<DhanQuoteResponse>(userId, '/marketfeed/quote', body);
+  }
+
   async getHistoricalDailyCandles(
     userId: string,
     input: {

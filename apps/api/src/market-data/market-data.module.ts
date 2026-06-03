@@ -27,6 +27,7 @@ import { PricesService } from './prices.service';
     CandlesService,
     IndicatorsService,
     MarketDataQualityService,
+    DhanMarketDataProviderService,
   ],
 })
 export class MarketDataModule {}

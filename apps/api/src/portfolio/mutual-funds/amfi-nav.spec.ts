@@ -57,6 +57,7 @@ describe('AMFI NAV matching and valuation', () => {
       expect.objectContaining({
         currentValue: 551.23,
         pnl: 151.23,
+        pnlPercent: 37.81,
         stale: false,
       }),
     );

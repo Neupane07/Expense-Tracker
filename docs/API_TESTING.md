@@ -8,15 +8,22 @@
 
 ## Portfolio tests
 
-- GET /portfolio/snapshot
+- GET /portfolio/snapshot — response now includes `summary` with
+  `totalInvested`, `totalCurrentValue`, `totalPnl`, `totalPnlPercent`,
+  `dayPnl`, `dayPnlPercent`, and per-bucket `listed`, `mutualFunds`, `cash`
+  aggregates plus `listedSummary` and `priceAsOf`.
 - POST /portfolio/sync/dhan
-- GET /portfolio/holdings
+- GET /portfolio/holdings — response is now `{ holdings, summary, priceAsOf, warnings }`.
+  Each holding includes `ltp`, `previousClose`, `investedValue`, `currentValue`,
+  `pnl`, `pnlPercent`, `dayPnl`, `dayPnlPercent`, and `priceFreshness`
+  (`LIVE` | `RECENT` | `STALE` | `MISSING` | `FALLBACK`).
 - GET /portfolio/orders
 
 ## Mutual fund tests
 
 - POST /portfolio/mutual-funds
-- GET /portfolio/mutual-funds
+- GET /portfolio/mutual-funds — response now includes `totalInvested`,
+  `totalPnl`, and `totalPnlPercent`. Each holding includes a `pnlPercent`.
 - PATCH /portfolio/mutual-funds/:holdingId
 - DELETE /portfolio/mutual-funds/:holdingId
 - POST /portfolio/sync/amfi-nav
