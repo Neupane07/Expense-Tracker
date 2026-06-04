@@ -1,4 +1,3 @@
-import { Route } from "lucide-react"
 import { useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,12 +12,13 @@ export function SignInPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
-          <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Route className="size-6" aria-hidden="true" />
+          <div className="mx-auto mb-3 w-full max-w-[12rem] border-l-[3px] border-[var(--chart-2)] pl-3 text-left">
+            <p className="text-sm font-semibold leading-tight">Personal Finance</p>
+            <p className="text-xs text-muted-foreground">Expenses & portfolio</p>
           </div>
-          <CardTitle>Expense Tracker</CardTitle>
+          <CardTitle>Sign in</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Private ICICI statement imports and expense review.
+            Invite-only access for statement imports, review, and dashboards.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">

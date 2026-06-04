@@ -156,6 +156,7 @@ export type DashboardSummary = {
 export type DashboardChartRow = {
   name: string
   amount: number
+  percent?: number
 }
 
 export type MonthlyTrendRow = {

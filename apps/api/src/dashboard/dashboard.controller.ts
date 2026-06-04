@@ -13,12 +13,19 @@ export class DashboardController {
   getSummary(
     @CurrentUser() user: AuthenticatedUser,
     @Query('month') month?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.dashboardService.getSummary(user.id, month);
+    return this.dashboardService.getSummary(user.id, { month, from, to });
   }
 
   @Get('charts')
-  getCharts(@CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.getCharts(user.id);
+  getCharts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('month') month?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.dashboardService.getCharts(user.id, { month, from, to });
   }
 }

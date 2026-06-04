@@ -33,6 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MetricCard } from "@/components/metric-card"
 import { apiDelete, apiGet, apiPatchJson, apiPostJson } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent } from "@/lib/format"
@@ -1629,17 +1630,6 @@ function ExposureTable({
         )}
       </CardContent>
     </Card>
-  )
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
-    </div>
   )
 }
 
