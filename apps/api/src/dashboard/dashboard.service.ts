@@ -7,12 +7,20 @@ type DecimalLike = {
   toNumber(): number;
 };
 
+export type DashboardPeriodInput = {
+  month?: string;
+  from?: string;
+  to?: string;
+};
+
+const TREND_MONTHS = 12;
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary(userId: string, month?: string) {
-    const dateWhere = this.buildDateWhere(month);
+  async getSummary(userId: string, period: DashboardPeriodInput) {
+    const dateWhere = this.buildDateWhere(period);
     const [
       expense,
       transfer,
@@ -42,30 +50,34 @@ export class DashboardService {
     };
   }
 
-  async getCharts(userId: string) {
-    const transactions = await this.prisma.transaction.findMany({
-      where: {
-        userId,
-        category: {
-          is: {
-            expenseType: ExpenseType.EXPENSE,
-          },
+  async getCharts(userId: string, period: DashboardPeriodInput) {
+    const dateWhere = this.buildDateWhere(period);
+    const expenseFilter: TransactionWhereInput = {
+      userId,
+      category: {
+        is: {
+          expenseType: ExpenseType.EXPENSE,
         },
       },
-      include: {
-        account: true,
-        category: true,
-      },
-      orderBy: {
-        transactionDate: 'asc',
-      },
-    });
+    };
+
+    const [periodTransactions, trendTransactions] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: { ...expenseFilter, ...dateWhere },
+        include: { account: true, category: true },
+      }),
+      this.prisma.transaction.findMany({
+        where: { ...expenseFilter, ...this.buildTrendDateWhere() },
+        include: { category: true },
+      }),
+    ]);
+
     const categorySpend = new Map<string, number>();
     const vendorSpend = new Map<string, number>();
     const sourceSpend = new Map<string, number>();
     const monthlyTrend = new Map<string, number>();
 
-    transactions.forEach((transaction) => {
+    periodTransactions.forEach((transaction) => {
       const amount = this.decimalToNumber(transaction.moneyOut);
 
       this.addAmount(
@@ -79,6 +91,10 @@ export class DashboardService {
         amount,
       );
       this.addAmount(sourceSpend, transaction.sourceType, amount);
+    });
+
+    trendTransactions.forEach((transaction) => {
+      const amount = this.decimalToNumber(transaction.moneyOut);
       this.addAmount(
         monthlyTrend,
         this.monthKey(transaction.transactionDate),
@@ -87,9 +103,9 @@ export class DashboardService {
     });
 
     return {
-      categorySpend: this.toSortedChartRows(categorySpend),
-      vendorSpend: this.toSortedChartRows(vendorSpend).slice(0, 15),
-      sourceSpend: this.toSortedChartRows(sourceSpend),
+      categorySpend: this.toSortedChartRowsWithPercent(categorySpend),
+      vendorSpend: this.toSortedChartRowsWithPercent(vendorSpend).slice(0, 15),
+      sourceSpend: this.toSortedChartRowsWithPercent(sourceSpend),
       monthlyTrend: this.toMonthlyRows(monthlyTrend),
     };
   }
@@ -151,11 +167,26 @@ export class DashboardService {
     };
   }
 
-  private buildDateWhere(month?: string) {
-    if (!month) {
-      return {};
+  private buildDateWhere(period: DashboardPeriodInput): TransactionWhereInput {
+    const { month, from, to } = period;
+    const hasRange = Boolean(from || to);
+
+    if (month && hasRange) {
+      throw new BadRequestException('Use either month or from/to, not both');
     }
 
+    if (month) {
+      return this.monthDateWhere(month);
+    }
+
+    if (hasRange) {
+      return this.rangeDateWhere(from, to);
+    }
+
+    return {};
+  }
+
+  private monthDateWhere(month: string): TransactionWhereInput {
     const match = /^(\d{4})-(\d{2})$/.exec(month);
 
     if (!match) {
@@ -177,6 +208,60 @@ export class DashboardService {
     };
   }
 
+  private rangeDateWhere(
+    from: string | undefined,
+    to: string | undefined,
+  ): TransactionWhereInput {
+    const fromDate = from ? this.parseIsoDate(from, 'from') : null;
+    const toDate = to ? this.parseIsoDate(to, 'to') : null;
+
+    if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+      throw new BadRequestException('from must be on or before to');
+    }
+
+    const transactionDate: { gte?: Date; lt?: Date } = {};
+    if (fromDate) {
+      transactionDate.gte = fromDate;
+    }
+    if (toDate) {
+      transactionDate.lt = new Date(toDate.getTime() + 24 * 60 * 60 * 1000);
+    }
+
+    return { transactionDate };
+  }
+
+  private parseIsoDate(value: string, label: 'from' | 'to'): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+    if (!match) {
+      throw new BadRequestException(`${label} must be in YYYY-MM-DD format`);
+    }
+
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, monthIndex, day));
+
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== monthIndex ||
+      date.getUTCDate() !== day
+    ) {
+      throw new BadRequestException(`${label} must be a valid date`);
+    }
+
+    return date;
+  }
+
+  private buildTrendDateWhere(): TransactionWhereInput {
+    const now = new Date();
+    const start = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (TREND_MONTHS - 1), 1),
+    );
+
+    return { transactionDate: { gte: start } };
+  }
+
   private decimalToNumber(value: DecimalLike | null | undefined) {
     return value?.toNumber() ?? 0;
   }
@@ -185,13 +270,20 @@ export class DashboardService {
     map.set(key, (map.get(key) ?? 0) + amount);
   }
 
-  private toSortedChartRows(map: Map<string, number>) {
-    return Array.from(map.entries())
+  private toSortedChartRowsWithPercent(map: Map<string, number>) {
+    const rows = Array.from(map.entries())
       .map(([name, amount]) => ({
         name,
         amount: Math.round(amount * 100) / 100,
       }))
       .sort((left, right) => right.amount - left.amount);
+
+    const total = rows.reduce((sum, row) => sum + row.amount, 0);
+
+    return rows.map((row) => ({
+      ...row,
+      percent: total > 0 ? Math.round((row.amount / total) * 1000) / 10 : 0,
+    }));
   }
 
   private toMonthlyRows(map: Map<string, number>) {

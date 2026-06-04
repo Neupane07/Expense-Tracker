@@ -100,19 +100,32 @@ make clear that manual review edits are skipped.
 ### Dashboard
 Route: `/dashboard`
 
-Cards:
-- Total actual expense
+Period filter (top of page):
+- Defaults to the current month.
+- Presets: This month, Last month, Last 3 months, Last 6 months, Year to date, All time, Pick a month, Custom range.
+- "Pick a month" reveals a month input and sends `?month=YYYY-MM`.
+- "Custom range" reveals `from` and `to` date inputs and sends `?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+- Month and from/to are mutually exclusive in the API and in the UI; the visible inputs are derived strictly from the selected preset.
+- All summary numbers and category/vendor/source charts respect the selected period.
+
+Primary metrics (4-up `MetricCard` grid):
+- Total expense
 - Bank/UPI expense
 - Credit card expense
+- Needs review
+
+Excluded-from-spend card (3-up):
 - Transfers excluded
 - Investments excluded
-- Review amount
+- Refunds received (with net expense hint when refunds are present)
 
 Charts:
-- Category-wise spend
-- Vendor-wise spend
-- Source-wise spend
-- Monthly trend
+- Category mix donut + percentage legend (top 8, with an "Other (n)" bucket for the long tail).
+- Top categories list with progress bars (amount and share).
+- Top vendors and By source horizontal bar charts with amount and share tables.
+- Monthly trend line chart always shows the last 12 months for context, independent of the period filter.
+
+The dashboard is the only place where these donut/percentage breakdowns appear; transactions, review, and rules pages stay table-first.
 
 ### Portfolio
 Route: `/portfolio`
@@ -178,6 +191,14 @@ Use these components first:
 - Dialog
 - Dropdown Menu
 - Tabs
+- Sheet (mobile navigation drawer)
 - Toast/Sonner
 
 Do not create custom styled controls if shadcn/ui has a matching component.
+
+## Layout
+- App chrome uses the brand **Personal Finance** with tagline **Expenses & portfolio** (no bank-specific subtitle in the shell).
+- Desktop (`lg+`) keeps the fixed left sidebar with grouped sections: Expenses, Finance OS, Admin.
+- Mobile and tablet (`<lg`) use a full-height `Sheet` drawer: brand row with integrated close control, scrollable nav with larger tap targets, and a footer showing the signed-in user (initials avatar). Nav links close the sheet via `onClick`, not `SheetClose` wrappers (avoids stray focus rings).
+- Sidebar nav ([app-sidebar-nav.tsx](apps/web/src/components/layout/app-sidebar-nav.tsx)): grouped sections with accent dot, short caption, dividers between groups, and items with rounded icon tiles tinted by section chart color (`--chart-1` expenses, `--chart-2` finance OS, `--chart-4` admin). Active item uses tinted background, inset ring, semibold label, and trailing accent dot.
+- Header shows app name, page title, sign-out, and user email on `md+`; the menu button only appears below `lg`.
