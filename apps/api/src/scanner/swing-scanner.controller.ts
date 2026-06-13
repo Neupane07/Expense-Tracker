@@ -4,11 +4,14 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { parseScannerReadinessQuery } from './scanner-readiness.dto';
+import { ScannerReadinessService } from './scanner-readiness.service';
 import { runSwingScanSchema, type RunSwingScanInput } from './scanner.dto';
 import { ScannerService } from './scanner.service';
 import { SwingScannerService } from './swing-scanner.service';
@@ -19,11 +22,20 @@ export class SwingScannerController {
   constructor(
     private readonly scannerService: ScannerService,
     private readonly swingScanner: SwingScannerService,
+    private readonly readiness: ScannerReadinessService,
   ) {}
 
   @Get()
   getStatus() {
     return this.scannerService.getStatus();
+  }
+
+  @Get('readiness')
+  getReadiness(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    return this.readiness.getReadiness(user.id, parseScannerReadinessQuery(query));
   }
 
   @Post('swing/run')

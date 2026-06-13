@@ -8,7 +8,7 @@
     "db:down": "docker compose down",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter api test",
+    "test": "pnpm --filter api test && pnpm --filter api test:e2e && pnpm --filter web test",
     "build": "pnpm -r build"
   },
   "packageManager": "pnpm@11.1.2"

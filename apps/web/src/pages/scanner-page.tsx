@@ -23,6 +23,13 @@ import {
 import { apiPostJson } from "@/lib/api-client"
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/format"
 import { useApiQuery } from "@/lib/use-api-query"
+import {
+  DataQualityBadges,
+  ReadinessStatusBadge,
+  RejectReasonList,
+  ResearchDisclaimer,
+  WarningsList,
+} from "@/components/finance/finance-quality"
 import { EmptyState, ErrorState, LoadingState } from "./page-state"
 
 type SwingCandidate = {
@@ -90,6 +97,22 @@ type SwingCandidatesResponse = {
   researchDisclaimer: string
 }
 
+type ScannerReadinessResponse = {
+  status: "READY" | "DEGRADED" | "BLOCKED"
+  universe: string[]
+  universeSource: "holdings" | "symbols"
+  warnings: string[]
+  blockers: string[]
+  checks: Array<{
+    id: string
+    label: string
+    status: "READY" | "DEGRADED" | "BLOCKED"
+    warnings: string[]
+    blockers: string[]
+  }>
+  researchDisclaimer: string
+}
+
 function statusVariant(status: SwingCandidate["status"]) {
   if (status === "candidate") {
     return "default" as const
@@ -125,6 +148,9 @@ export function SwingScannerPage() {
 
   const candidatesQuery = useApiQuery<SwingCandidatesResponse>(
     "/scanner/swing/candidates",
+  )
+  const readinessQuery = useApiQuery<ScannerReadinessResponse>(
+    "/scanner/readiness",
   )
 
   const candidates = useMemo(
@@ -221,7 +247,7 @@ export function SwingScannerPage() {
   const disclaimer =
     lastRun?.researchDisclaimer ??
     candidatesQuery.data?.researchDisclaimer ??
-    "Research only — verify and place manually in Dhan."
+    readinessQuery.data?.researchDisclaimer
 
   return (
     <div className="space-y-4">
@@ -237,9 +263,24 @@ export function SwingScannerPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-            {disclaimer}
-          </p>
+          <ResearchDisclaimer text={disclaimer} />
+
+          {readinessQuery.data ? (
+            <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">Scanner readiness</span>
+                <ReadinessStatusBadge status={readinessQuery.data.status} />
+                <Badge variant="outline">
+                  {readinessQuery.data.universeSource} ·{" "}
+                  {readinessQuery.data.universe.length} symbols
+                </Badge>
+              </div>
+              <WarningsList warnings={readinessQuery.data.warnings} />
+              <RejectReasonList reasons={readinessQuery.data.blockers} />
+            </div>
+          ) : readinessQuery.isLoading ? (
+            <LoadingState message="Checking scanner readiness" />
+          ) : null}
 
           <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runScan}>
             <div className="space-y-2">
@@ -469,19 +510,14 @@ export function SwingScannerPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium">Data quality</p>
-                  <div className="flex flex-wrap gap-1">
-                    <Badge variant={freshnessVariant(selectedCandidate.dataQuality.freshness)}>
-                      {selectedCandidate.dataQuality.freshness}
-                    </Badge>
-                    <Badge variant="outline">
-                      {selectedCandidate.dataQuality.confidence}
-                    </Badge>
-                    {selectedCandidate.dataQuality.priceSource ? (
-                      <Badge variant="outline">
-                        {selectedCandidate.dataQuality.priceSource}
-                      </Badge>
-                    ) : null}
-                  </div>
+                  <DataQualityBadges
+                    dataQuality={{
+                      freshness: selectedCandidate.dataQuality.freshness,
+                      confidence: selectedCandidate.dataQuality.confidence,
+                      source: selectedCandidate.dataQuality.priceSource ?? undefined,
+                    }}
+                    warnings={selectedCandidate.dataQuality.warnings}
+                  />
                 </div>
                 <Button
                   type="button"
