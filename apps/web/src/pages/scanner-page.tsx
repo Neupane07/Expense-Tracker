@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { apiPostJson } from "@/lib/api-client"
+import { apiGet, apiPostJson } from "@/lib/api-client"
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/format"
 import { useApiQuery } from "@/lib/use-api-query"
 import {
@@ -139,6 +139,7 @@ function freshnessVariant(freshness: string) {
 
 export function SwingScannerPage() {
   const [symbolInput, setSymbolInput] = useState("")
+  const [readinessSymbols, setReadinessSymbols] = useState<string[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
@@ -146,12 +147,19 @@ export function SwingScannerPage() {
   const [journalMessage, setJournalMessage] = useState<string | null>(null)
   const [isSavingJournal, setIsSavingJournal] = useState(false)
 
+  const readinessPath = useMemo(() => {
+    if (readinessSymbols.length > 0) {
+      return `/scanner/readiness?symbols=${encodeURIComponent(readinessSymbols.join(","))}`
+    }
+
+    return "/scanner/readiness"
+  }, [readinessSymbols])
+
   const candidatesQuery = useApiQuery<SwingCandidatesResponse>(
     "/scanner/swing/candidates",
   )
-  const readinessQuery = useApiQuery<ScannerReadinessResponse>(
-    "/scanner/readiness",
-  )
+  const readinessQuery = useApiQuery<ScannerReadinessResponse>(readinessPath)
+  const scanBlocked = readinessQuery.data?.status === "BLOCKED"
 
   const candidates = useMemo(
     () => lastRun?.candidates ?? candidatesQuery.data?.candidates ?? [],
@@ -222,6 +230,21 @@ export function SwingScannerPage() {
         .split(/[,\s]+/)
         .map((value) => value.trim().toUpperCase())
         .filter(Boolean)
+      setReadinessSymbols(symbols)
+
+      const readinessPathForRun =
+        symbols.length > 0
+          ? `/scanner/readiness?symbols=${encodeURIComponent(symbols.join(","))}`
+          : "/scanner/readiness"
+      const readiness = await apiGet<ScannerReadinessResponse>(readinessPathForRun)
+
+      if (readiness.status === "BLOCKED") {
+        setScanError(
+          `Scanner blocked: ${readiness.blockers.join(", ") || "readiness checks failed"}`,
+        )
+        return
+      }
+
       const payload =
         symbols.length > 0 ? { symbols, universe: "symbols" as const } : {}
 
@@ -295,12 +318,23 @@ export function SwingScannerPage() {
               />
             </div>
             <div className="flex items-end">
-              <Button type="submit" disabled={isRunning}>
+              <Button type="submit" disabled={isRunning || scanBlocked}>
                 <Play className="mr-2 size-4" />
-                {isRunning ? "Running scan…" : "Run scan"}
+                {isRunning
+                  ? "Running scan…"
+                  : scanBlocked
+                    ? "Scan blocked"
+                    : "Run scan"}
               </Button>
             </div>
           </form>
+
+          {scanBlocked ? (
+            <p className="text-sm text-destructive">
+              Scanner readiness is blocked for the current universe. Resolve blockers
+              above before running a scan.
+            </p>
+          ) : null}
 
           {scanError ? <ErrorState message={scanError} /> : null}
           {runMeta ? (

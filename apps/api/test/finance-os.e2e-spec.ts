@@ -255,4 +255,11 @@ describe('Finance OS authenticated boundaries (e2e)', () => {
       ]),
     );
   });
+
+  it('rejects invalid scanner readiness query parameters', async () => {
+    await request(app.getHttpServer())
+      .get('/scanner/readiness?symbols=INFY&universe=symbols')
+      .set('Cookie', sessionCookie('user-a'))
+      .expect(400);
+  });
 });

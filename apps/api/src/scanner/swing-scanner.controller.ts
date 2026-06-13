@@ -35,7 +35,10 @@ export class SwingScannerController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: Record<string, string | undefined>,
   ) {
-    return this.readiness.getReadiness(user.id, parseScannerReadinessQuery(query));
+    return this.readiness.getReadiness(
+      user.id,
+      parseScannerReadinessQuery(query),
+    );
   }
 
   @Post('swing/run')

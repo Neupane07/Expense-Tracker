@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
 import { SwingScannerService } from './swing-scanner.service';
 import { DEFAULT_RISK_SETTINGS } from '../risk/risk-settings.service';
 
@@ -25,6 +26,7 @@ describe('SwingScannerService', () => {
       low: close - 2,
       close,
       volume: 10000 + index * 100,
+      isAdjusted: true,
     };
   });
 
@@ -50,6 +52,7 @@ describe('SwingScannerService', () => {
     indicators?: unknown;
     validation?: unknown;
     researchStatus?: unknown;
+    readiness?: unknown;
   }) {
     const prisma = {
       brokerHoldingSnapshot: {
@@ -180,6 +183,18 @@ describe('SwingScannerService', () => {
         },
       ),
     };
+    const readiness = {
+      getReadiness: jest.fn().mockResolvedValue(
+        overrides?.readiness ?? {
+          status: 'READY',
+          blockers: [],
+          warnings: [],
+          universeSource: 'symbols',
+          universe: ['INFY'],
+        },
+      ),
+    };
+    const instrumentVerification = new InstrumentVerificationService();
 
     return {
       service: new SwingScannerService(
@@ -192,10 +207,13 @@ describe('SwingScannerService', () => {
         exposure as never,
         riskSettings as never,
         researchSnapshots as never,
+        readiness as never,
+        instrumentVerification,
       ),
       prisma,
       tradeValidation,
       prices,
+      readiness,
     };
   }
 
@@ -208,6 +226,58 @@ describe('SwingScannerService', () => {
 
     expect(result.candidates[0]?.rejectReasons).toContain('UNKNOWN_SYMBOL');
     expect(result.candidates[0]?.status).toBe('rejected');
+  });
+
+  it('rejects blocked scans before processing candle history', async () => {
+    const { service } = createService({
+      readiness: {
+        status: 'BLOCKED',
+        blockers: ['HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT'],
+        warnings: ['CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED'],
+        universeSource: 'symbols',
+        universe: ['INFY'],
+      },
+    });
+
+    await expect(
+      service.runScan('user-1', { symbols: ['INFY'] }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    try {
+      await service.runScan('user-1', { symbols: ['INFY'] });
+    } catch (error) {
+      expect((error as BadRequestException).getResponse()).toMatchObject({
+        blockers: ['HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT'],
+      });
+    }
+  });
+
+  it('rejects unadjusted candle history during symbol scans', async () => {
+    const unadjustedCandles = candles.map((candle) => ({
+      ...candle,
+      isAdjusted: false,
+    }));
+    const { service, readiness } = createService({
+      readiness: {
+        status: 'READY',
+        blockers: [],
+        warnings: [],
+        universeSource: 'symbols',
+        universe: ['INFY'],
+      },
+      candles: {
+        candles: unadjustedCandles,
+        source: 'DHAN',
+        warnings: [],
+      },
+    });
+
+    const result = await service.runScan('user-1', { symbols: ['INFY'] });
+
+    expect(readiness.getReadiness).toHaveBeenCalled();
+    expect(result.candidates[0]?.rejectReasons).toContain(
+      'HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT',
+    );
   });
 
   it('rejects stale market data', async () => {

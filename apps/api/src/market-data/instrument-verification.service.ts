@@ -116,15 +116,26 @@ export class InstrumentVerificationService {
     if (input.unadjustedCount > 0) {
       warnings.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
       blockers.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
+
+      return {
+        adjustmentStatus: 'UNVERIFIED',
+        providerAvailable: false,
+        blocksHistoricalAnalysis: true,
+        status: 'BLOCKED',
+        warnings,
+        blockers,
+      };
     }
+
+    warnings.push('CORPORATE_ACTION_PROVIDER_NOT_AVAILABLE');
 
     return {
       adjustmentStatus: 'UNVERIFIED',
       providerAvailable: false,
-      blocksHistoricalAnalysis: true,
-      status: blockers.length > 0 ? 'BLOCKED' : 'DEGRADED',
+      blocksHistoricalAnalysis: false,
+      status: 'DEGRADED',
       warnings,
-      blockers,
+      blockers: [],
     };
   }
 

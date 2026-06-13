@@ -21,6 +21,11 @@ import { TradeValidationService } from './trade-validation.service';
     ActiveTradeService,
     ExposureService,
   ],
-  exports: [TradeValidationService, ExposureService, RiskSettingsService, ActiveTradeService],
+  exports: [
+    TradeValidationService,
+    ExposureService,
+    RiskSettingsService,
+    ActiveTradeService,
+  ],
 })
 export class RiskModule {}

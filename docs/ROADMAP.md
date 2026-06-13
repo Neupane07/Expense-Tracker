@@ -6,9 +6,6 @@ Correctness and inspectability come before breadth. Build and test one internal
 read-only contract over existing services before exposing the same contract to
 external AI clients.
 
-Copy-paste implementation prompts and phase stop rules for Composer 2.5 are in
-`docs/COMPOSER_2_5_PROMPTS.md`.
-
 ## Phase 8: Current-State Hardening
 
 Status: Complete
@@ -46,7 +43,7 @@ Scope:
 - tool registry with versioned names and input/output schemas
 - standard response envelope and redaction
 - per-user authorization and audit records
-- initial tools listed in `docs/PRODUCT_PLAN.md`
+- initial read-only tools for portfolio, readiness, scanner, risk, research, and journal queries
 - reuse existing portfolio, market-data, scanner, risk, research, and journal
   query services; no duplicated calculations
 - manual Super Order plan formatter with no broker call

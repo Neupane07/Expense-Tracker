@@ -3,6 +3,23 @@ import { PrismaService } from '../prisma/prisma.service';
 
 type DecimalLike = { toNumber(): number };
 
+type BrokerPositionRow = {
+  tradingSymbol: string;
+  productType: string | null;
+  netQty: number;
+};
+
+type JournalActiveRow = {
+  id: string;
+  symbol: string;
+  side: string;
+  product: string;
+  plannedEntry: DecimalLike;
+  plannedStopLoss: DecimalLike;
+  quantity: number;
+  createdAt: Date;
+};
+
 export type ActiveTradeClassification =
   | 'confirmed'
   | 'inferred'
@@ -40,77 +57,79 @@ export class ActiveTradeService {
     const [journalActive, positions] = await Promise.all([
       this.prisma.tradeJournalEntry.findMany({
         where: { userId, status: 'ACTIVE' },
-        orderBy: { symbol: 'asc' },
+        orderBy: [{ symbol: 'asc' }, { createdAt: 'asc' }],
       }),
       this.findLatestPositions(userId),
     ]);
 
-    const positionBySymbol = new Map(
-      positions
-        .filter((position) => this.decimalToNumber(position.netQty) !== 0)
-        .map((position) => [
-          position.tradingSymbol.toUpperCase(),
-          this.decimalToNumber(position.netQty),
-        ]),
-    );
-    const journalSymbols = new Set(
-      journalActive.map((entry) => entry.symbol.toUpperCase()),
-    );
+    const deliveryPositions = positions
+      .map((position) => ({
+        tradingSymbol: position.tradingSymbol.toUpperCase(),
+        productType: position.productType,
+        netQty: this.decimalToNumber(position.netQty),
+      }))
+      .filter(
+        (position) =>
+          position.netQty !== 0 && isDeliveryProduct(position.productType),
+      );
 
+    const journalBySymbol = groupJournalBySymbol(journalActive);
+    const usedPositionKeys = new Set<string>();
     const trades: ReconciledActiveTrade[] = [];
     const warnings: string[] = [];
     let activeSwingCapital = 0;
     let maxLossIfActiveStopLossesHit = 0;
+    let confirmedCount = 0;
 
-    for (const entry of journalActive) {
-      const symbol = entry.symbol.toUpperCase();
-      const brokerPositionQty = positionBySymbol.get(symbol) ?? null;
-      const plannedEntry = this.decimalToNumber(entry.plannedEntry);
-      const plannedStopLoss = this.decimalToNumber(entry.plannedStopLoss);
-      const quantity = entry.quantity;
-      const hasValidStopGeometry =
-        plannedEntry > 0 &&
-        plannedStopLoss > 0 &&
-        plannedStopLoss < plannedEntry;
-      const maxLossIfStopHit = hasValidStopGeometry
-        ? roundMoney((plannedEntry - plannedStopLoss) * quantity)
-        : null;
-
-      let classification: ActiveTradeClassification;
-      const tradeWarnings: string[] = [];
-
-      if (!hasValidStopGeometry) {
-        classification = 'incomplete';
-        tradeWarnings.push('ACTIVE_TRADE_STOP_LOSS_PLAN_INCOMPLETE');
-      } else if (brokerPositionQty != null && brokerPositionQty !== 0) {
-        classification = 'confirmed';
-      } else {
-        classification = 'unmatched';
-        tradeWarnings.push('ACTIVE_JOURNAL_WITHOUT_BROKER_POSITION');
+    for (const [symbol, entries] of journalBySymbol.entries()) {
+      if (entries.length > 1) {
+        warnings.push('DUPLICATE_ACTIVE_JOURNAL_FOR_SYMBOL');
       }
 
-      activeSwingCapital += roundMoney(plannedEntry * quantity);
+      const symbolPositions = deliveryPositions.filter(
+        (position) => position.tradingSymbol === symbol,
+      );
+      let symbolConfirmed = false;
 
-      if (classification === 'confirmed' && maxLossIfStopHit != null) {
-        maxLossIfActiveStopLossesHit += maxLossIfStopHit;
+      for (const entry of entries) {
+        const reconciliation = this.reconcileJournalEntry(
+          entry,
+          symbolPositions,
+          usedPositionKeys,
+          symbolConfirmed,
+        );
+
+        if (reconciliation.classification === 'confirmed') {
+          symbolConfirmed = true;
+          confirmedCount += 1;
+          if (reconciliation.maxLossIfStopHit != null) {
+            maxLossIfActiveStopLossesHit += reconciliation.maxLossIfStopHit;
+          }
+        }
+
+        activeSwingCapital += roundMoney(
+          reconciliation.plannedEntry != null
+            ? reconciliation.plannedEntry * (reconciliation.quantity ?? 0)
+            : 0,
+        );
+        trades.push(reconciliation);
       }
-
-      trades.push({
-        symbol,
-        journalEntryId: entry.id,
-        classification,
-        quantity,
-        plannedEntry,
-        plannedStopLoss,
-        maxLossIfStopHit,
-        brokerPositionQty,
-        warnings: tradeWarnings,
-      });
     }
 
-    const inferredBrokerPositions = [...positionBySymbol.entries()]
-      .filter(([symbol]) => !journalSymbols.has(symbol))
-      .map(([symbol, quantity]) => ({ symbol, quantity }));
+    const matchedJournalSymbols = new Set(journalBySymbol.keys());
+    const inferredBrokerPositions = deliveryPositions
+      .filter((position) => {
+        const key = positionKey(position);
+        return (
+          !usedPositionKeys.has(key) &&
+          !matchedJournalSymbols.has(position.tradingSymbol) &&
+          position.netQty > 0
+        );
+      })
+      .map((position) => ({
+        symbol: position.tradingSymbol,
+        quantity: position.netQty,
+      }));
 
     const unmatchedJournalEntries = trades
       .filter((trade) => trade.classification === 'unmatched')
@@ -131,10 +150,6 @@ export class ActiveTradeService {
       warnings.push('ACTIVE_TRADE_STOP_LOSS_CONTEXT_INCOMPLETE');
     }
 
-    const confirmedCount = trades.filter(
-      (trade) => trade.classification === 'confirmed',
-    ).length;
-
     return {
       trades,
       confirmedCount,
@@ -143,7 +158,154 @@ export class ActiveTradeService {
       maxLossIfActiveStopLossesHit: roundMoney(maxLossIfActiveStopLossesHit),
       inferredBrokerPositions,
       unmatchedJournalEntries,
-      warnings,
+      warnings: [...new Set(warnings)],
+    };
+  }
+
+  private reconcileJournalEntry(
+    entry: JournalActiveRow,
+    symbolPositions: BrokerPositionRow[],
+    usedPositionKeys: Set<string>,
+    symbolAlreadyConfirmed: boolean,
+  ): ReconciledActiveTrade {
+    const symbol = entry.symbol.toUpperCase();
+    const plannedEntry = this.decimalToNumber(entry.plannedEntry);
+    const plannedStopLoss = this.decimalToNumber(entry.plannedStopLoss);
+    const quantity = entry.quantity;
+    const tradeWarnings: string[] = [];
+    const side = entry.side.trim().toUpperCase();
+    const product = entry.product.trim().toUpperCase();
+    const hasValidStopGeometry =
+      plannedEntry > 0 && plannedStopLoss > 0 && plannedStopLoss < plannedEntry;
+    const maxLossIfStopHit = hasValidStopGeometry
+      ? roundMoney((plannedEntry - plannedStopLoss) * quantity)
+      : null;
+
+    if (symbolAlreadyConfirmed) {
+      return this.buildTrade({
+        symbol,
+        journalEntryId: entry.id,
+        classification: 'incomplete',
+        quantity,
+        plannedEntry,
+        plannedStopLoss,
+        maxLossIfStopHit,
+        brokerPositionQty: null,
+        warnings: ['DUPLICATE_ACTIVE_JOURNAL_ENTRY'],
+      });
+    }
+
+    if (product !== 'DELIVERY') {
+      return this.buildTrade({
+        symbol,
+        journalEntryId: entry.id,
+        classification: 'incomplete',
+        quantity,
+        plannedEntry,
+        plannedStopLoss,
+        maxLossIfStopHit,
+        brokerPositionQty: null,
+        warnings: ['ACTIVE_JOURNAL_PRODUCT_NOT_DELIVERY'],
+      });
+    }
+
+    if (!hasValidStopGeometry) {
+      return this.buildTrade({
+        symbol,
+        journalEntryId: entry.id,
+        classification: 'incomplete',
+        quantity,
+        plannedEntry,
+        plannedStopLoss,
+        maxLossIfStopHit,
+        brokerPositionQty: null,
+        warnings: ['ACTIVE_TRADE_STOP_LOSS_PLAN_INCOMPLETE'],
+      });
+    }
+
+    const matchingPositions = symbolPositions.filter((position) =>
+      positionMatchesJournalSide(position, side),
+    );
+
+    if (matchingPositions.length === 0) {
+      const incompatiblePosition = symbolPositions[0];
+      const brokerPositionQty = incompatiblePosition?.netQty ?? null;
+
+      return this.buildTrade({
+        symbol,
+        journalEntryId: entry.id,
+        classification: incompatiblePosition ? 'incomplete' : 'unmatched',
+        quantity,
+        plannedEntry,
+        plannedStopLoss,
+        maxLossIfStopHit,
+        brokerPositionQty,
+        warnings: incompatiblePosition
+          ? ['BROKER_POSITION_PRODUCT_OR_SIDE_MISMATCH']
+          : ['ACTIVE_JOURNAL_WITHOUT_BROKER_POSITION'],
+      });
+    }
+
+    const exactMatch = matchingPositions.find(
+      (position) =>
+        !usedPositionKeys.has(positionKey(position)) &&
+        Math.abs(position.netQty) === quantity,
+    );
+
+    if (exactMatch) {
+      usedPositionKeys.add(positionKey(exactMatch));
+      return this.buildTrade({
+        symbol,
+        journalEntryId: entry.id,
+        classification: 'confirmed',
+        quantity,
+        plannedEntry,
+        plannedStopLoss,
+        maxLossIfStopHit,
+        brokerPositionQty: exactMatch.netQty,
+        warnings: tradeWarnings,
+      });
+    }
+
+    const availableMatch = matchingPositions.find(
+      (position) => !usedPositionKeys.has(positionKey(position)),
+    );
+
+    return this.buildTrade({
+      symbol,
+      journalEntryId: entry.id,
+      classification: 'incomplete',
+      quantity,
+      plannedEntry,
+      plannedStopLoss,
+      maxLossIfStopHit,
+      brokerPositionQty:
+        availableMatch?.netQty ?? matchingPositions[0]?.netQty ?? null,
+      warnings: ['ACTIVE_TRADE_QUANTITY_MISMATCH'],
+    });
+  }
+
+  private buildTrade(input: {
+    symbol: string;
+    journalEntryId: string;
+    classification: ActiveTradeClassification;
+    quantity: number;
+    plannedEntry: number;
+    plannedStopLoss: number;
+    maxLossIfStopHit: number | null;
+    brokerPositionQty: number | null;
+    warnings: string[];
+  }): ReconciledActiveTrade {
+    return {
+      symbol: input.symbol,
+      journalEntryId: input.journalEntryId,
+      classification: input.classification,
+      quantity: input.quantity,
+      plannedEntry: input.plannedEntry,
+      plannedStopLoss: input.plannedStopLoss,
+      maxLossIfStopHit: input.maxLossIfStopHit,
+      brokerPositionQty: input.brokerPositionQty,
+      warnings: input.warnings,
     };
   }
 
@@ -170,6 +332,48 @@ export class ActiveTradeService {
 
     return value?.toNumber() ?? 0;
   }
+}
+
+function groupJournalBySymbol(entries: JournalActiveRow[]) {
+  const grouped = new Map<string, JournalActiveRow[]>();
+
+  for (const entry of entries) {
+    const symbol = entry.symbol.toUpperCase();
+    const rows = grouped.get(symbol) ?? [];
+    rows.push(entry);
+    grouped.set(symbol, rows);
+  }
+
+  return grouped;
+}
+
+function isDeliveryProduct(productType: string | null | undefined) {
+  const normalized = (productType ?? '').trim().toUpperCase();
+
+  return (
+    normalized === 'CNC' ||
+    normalized === 'DELIVERY' ||
+    normalized.includes('CNC')
+  );
+}
+
+function positionMatchesJournalSide(
+  position: BrokerPositionRow,
+  journalSide: string,
+) {
+  if (journalSide === 'BUY') {
+    return position.netQty > 0;
+  }
+
+  if (journalSide === 'SELL') {
+    return position.netQty < 0;
+  }
+
+  return false;
+}
+
+function positionKey(position: BrokerPositionRow) {
+  return `${position.tradingSymbol}:${position.productType ?? 'UNKNOWN'}:${position.netQty}`;
 }
 
 function roundMoney(value: number) {

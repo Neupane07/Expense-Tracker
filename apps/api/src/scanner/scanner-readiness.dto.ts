@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
 
 export const scannerReadinessQuerySchema = z
@@ -14,7 +15,10 @@ export function parseScannerReadinessQuery(
   const parsed = scannerReadinessQuerySchema.safeParse(query);
 
   if (!parsed.success) {
-    return { symbols: undefined };
+    throw new BadRequestException({
+      message: 'Invalid scanner readiness query',
+      issues: parsed.error.issues,
+    });
   }
 
   const symbols = parsed.data.symbols

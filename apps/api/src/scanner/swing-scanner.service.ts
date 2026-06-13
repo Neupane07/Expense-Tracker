@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PortfolioAssetClass } from '../generated/prisma/client';
+import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
 import { CandlesService } from '../market-data/candles.service';
 import { IndicatorsService } from '../market-data/indicators.service';
 import { InstrumentsService } from '../market-data/instruments.service';
@@ -17,6 +22,7 @@ import {
   type ScannerResearchStatus,
 } from '../research/research-snapshot.service';
 import type { RunSwingScanInput, SwingSetupType } from './scanner.dto';
+import { ScannerReadinessService } from './scanner-readiness.service';
 import {
   componentScores,
   scoreSwingConfidence,
@@ -98,10 +104,27 @@ export class SwingScannerService {
     private readonly exposure: ExposureService,
     private readonly riskSettings: RiskSettingsService,
     private readonly researchSnapshots: ResearchSnapshotService,
+    private readonly readiness: ScannerReadinessService,
+    private readonly instrumentVerification: InstrumentVerificationService,
   ) {}
 
   async runScan(userId: string, input: RunSwingScanInput = {}) {
     const universe = await this.resolveUniverse(userId, input);
+    const readiness = await this.readiness.getReadiness(userId, {
+      symbols: input.symbols,
+    });
+
+    if (readiness.status === 'BLOCKED') {
+      throw new BadRequestException({
+        message: 'Scanner readiness is blocked for the requested universe.',
+        status: readiness.status,
+        blockers: readiness.blockers,
+        warnings: readiness.warnings,
+        universe,
+        universeSource: readiness.universeSource,
+      });
+    }
+
     const portfolioRisk = await this.exposure.getPortfolioRisk(userId);
     const settings = this.riskSettings.getSettings();
     const scanWarnings: string[] = [];
@@ -351,6 +374,35 @@ export class SwingScannerService {
           setupType: 'BREAKOUT',
           rejectReasons: ['CANDLES_MISSING'],
           warnings: candleResponse.warnings ?? [],
+          dataQuality: buildDataQuality(
+            priceResponse as unknown as PriceResponseShape,
+            candleResponse.source,
+          ),
+          researchStatus,
+        }),
+      ];
+    }
+
+    const corporateActionPolicy =
+      this.instrumentVerification.evaluateCorporateActionPolicy({
+        candleCount: candleResponse.candles.length,
+        unadjustedCount: candleResponse.candles.filter(
+          (candle) => !candle.isAdjusted,
+        ).length,
+        providerClaimsAdjusted: false,
+      });
+
+    if (corporateActionPolicy.blocksHistoricalAnalysis) {
+      return [
+        this.buildRejectedCandidate({
+          symbol: normalizedSymbol,
+          name: instrument.name,
+          setupType: 'BREAKOUT',
+          rejectReasons: [
+            'HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT',
+            ...corporateActionPolicy.blockers,
+          ],
+          warnings: corporateActionPolicy.warnings,
           dataQuality: buildDataQuality(
             priceResponse as unknown as PriceResponseShape,
             candleResponse.source,
