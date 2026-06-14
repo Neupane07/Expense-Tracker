@@ -6,6 +6,9 @@ const REDACTED = '[REDACTED]';
 const SENSITIVE_KEY_PATTERN =
   /(password|secret|token|credential|apikey|api_key|apisecret|api_secret|accesstoken|access_token|refreshtoken|refresh_token|session|cookie|authorization|bearer|privatekey|private_key)/i;
 
+const AUDIT_FINANCIAL_VALUE_KEY_PATTERN =
+  /^(entry|target|stopLoss|stop_loss|quantity|capital|limitPrice|targetPrice|stopLossPrice|price|averageTradedPrice|plannedEntry|plannedTarget|plannedStopLoss)$/i;
+
 const SECRET_VALUE_PATTERNS = [
   /^Bearer\s+/i,
   /^dhan[_-]/i,
@@ -28,7 +31,7 @@ export class ToolRedactionService {
     const redacted = this.redactUnknown(input);
 
     if (redacted == null || typeof redacted !== 'object') {
-      return { value: redacted };
+      return { value: typeof redacted };
     }
 
     if (Array.isArray(redacted)) {
@@ -39,45 +42,38 @@ export class ToolRedactionService {
     return {
       keys: Object.keys(record).sort(),
       fieldCount: Object.keys(record).length,
-      preview: this.summarizeRecord(record),
+      fieldTypes: this.describeFieldTypes(record),
     };
   }
 
-  private summarizeRecord(record: Record<string, unknown>) {
-    const preview: Record<string, unknown> = {};
+  private describeFieldTypes(record: Record<string, unknown>) {
+    const fieldTypes: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(record)) {
       if (SENSITIVE_KEY_PATTERN.test(key)) {
-        preview[key] = REDACTED;
+        fieldTypes[key] = 'redacted';
         continue;
       }
 
-      if (typeof value === 'string' && this.looksLikeSecret(value)) {
-        preview[key] = REDACTED;
+      if (AUDIT_FINANCIAL_VALUE_KEY_PATTERN.test(key)) {
+        fieldTypes[key] = 'redacted';
         continue;
       }
 
-      if (typeof value === 'string') {
-        preview[key] = value.length > 80 ? `${value.slice(0, 80)}…` : value;
-        continue;
-      }
-
-      if (typeof value === 'number' || typeof value === 'boolean') {
-        preview[key] = value;
+      if (value == null) {
+        fieldTypes[key] = 'null';
         continue;
       }
 
       if (Array.isArray(value)) {
-        preview[key] = `[array:${value.length}]`;
+        fieldTypes[key] = `array:${value.length}`;
         continue;
       }
 
-      if (value && typeof value === 'object') {
-        preview[key] = '[object]';
-      }
+      fieldTypes[key] = typeof value;
     }
 
-    return preview;
+    return fieldTypes;
   }
 
   private redactUnknown(value: unknown, parentKey?: string): unknown {
@@ -97,6 +93,14 @@ export class ToolRedactionService {
       return value;
     }
 
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      if (parentKey && AUDIT_FINANCIAL_VALUE_KEY_PATTERN.test(parentKey)) {
+        return REDACTED;
+      }
+
+      return value;
+    }
+
     if (Array.isArray(value)) {
       return value.map((item) => this.redactUnknown(item));
     }
@@ -106,6 +110,11 @@ export class ToolRedactionService {
 
       for (const [key, nested] of Object.entries(value)) {
         if (SENSITIVE_KEY_PATTERN.test(key)) {
+          output[key] = REDACTED;
+          continue;
+        }
+
+        if (AUDIT_FINANCIAL_VALUE_KEY_PATTERN.test(key)) {
           output[key] = REDACTED;
           continue;
         }

@@ -2,10 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { RunSwingScanInput } from '../../scanner/scanner.dto';
 import { SwingScannerService } from '../../scanner/swing-scanner.service';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
-import {
-  genericToolDataSchema,
-  scanSwingCandidatesInputSchema,
-} from '../tool-schemas';
+import { scanSwingCandidatesInputSchema } from '../tool-schemas';
+import { scanSwingCandidatesOutputSchema } from '../tool-output-schemas';
 
 @Injectable()
 export class ScanSwingCandidatesTool {
@@ -18,7 +16,7 @@ export class ScanSwingCandidatesTool {
       'User-triggered swing scan over holdings or explicit symbols. Research-only; does not place orders.',
     readOnly: true as const,
     inputSchema: scanSwingCandidatesInputSchema,
-    outputSchema: genericToolDataSchema,
+    outputSchema: scanSwingCandidatesOutputSchema,
     handler: (context: ToolContext, input: RunSwingScanInput) =>
       this.handle(context, input),
   };
@@ -28,7 +26,9 @@ export class ScanSwingCandidatesTool {
     input: RunSwingScanInput,
   ): Promise<ToolHandlerResult> {
     try {
-      const result = await this.swingScanner.runScan(context.userId, input);
+      const result = await this.swingScanner.runScan(context.userId, input, {
+        abortSignal: context.abortSignal,
+      });
       const rejectedCount = result.candidates.filter(
         (candidate) => candidate.status === 'rejected',
       ).length;

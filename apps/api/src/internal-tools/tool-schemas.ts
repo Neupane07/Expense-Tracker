@@ -28,10 +28,6 @@ export const validateTradeSetupInputSchema = validateTradeSchema;
 
 export const createManualSuperOrderPlanInputSchema = validateTradeSchema;
 
-export const portfolioSnapshotDataSchema = z.record(z.string(), z.unknown());
-
-export const genericToolDataSchema = z.record(z.string(), z.unknown());
-
 export type SymbolInput = z.infer<typeof symbolInputSchema>;
 export type MarketDataStatusInput = z.infer<typeof marketDataStatusInputSchema>;
 export type ScannerReadinessInput = z.infer<typeof scannerReadinessInputSchema>;

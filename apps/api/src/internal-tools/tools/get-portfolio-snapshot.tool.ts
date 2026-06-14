@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PortfolioService } from '../../portfolio/portfolio.service';
+import { assessPortfolioSnapshotQuality } from '../portfolio-snapshot-quality';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
-import { emptyInputSchema, portfolioSnapshotDataSchema } from '../tool-schemas';
+import { emptyInputSchema } from '../tool-schemas';
+import { portfolioSnapshotOutputSchema } from '../tool-output-schemas';
 
 @Injectable()
 export class GetPortfolioSnapshotTool {
@@ -14,27 +16,29 @@ export class GetPortfolioSnapshotTool {
       'Read-only portfolio snapshot with allocation, valuation summary, and warnings.',
     readOnly: true as const,
     inputSchema: emptyInputSchema,
-    outputSchema: portfolioSnapshotDataSchema,
+    outputSchema: portfolioSnapshotOutputSchema,
     handler: (context: ToolContext) => this.handle(context),
   };
 
   async handle(context: ToolContext): Promise<ToolHandlerResult> {
     const snapshot = await this.portfolio.getSnapshot(context.userId);
-    const warnings = Array.isArray(snapshot.warnings) ? snapshot.warnings : [];
-    const hasBlockers = warnings.some((warning) =>
-      /missing|unavailable|no synced/i.test(warning),
-    );
+    const quality = assessPortfolioSnapshotQuality({
+      warnings: Array.isArray(snapshot.warnings) ? snapshot.warnings : [],
+      listedSummary: snapshot.listedSummary,
+      priceAsOf: snapshot.priceAsOf,
+    });
 
     return {
-      status: hasBlockers ? 'unavailable' : 'ok',
+      status: quality.status,
       data: snapshot,
       dataQuality: {
         source: snapshot.source ?? null,
         asOf: snapshot.snapshotTime,
-        freshness: snapshot.priceAsOf ? 'RECENT' : 'MISSING',
+        freshness: quality.freshness,
+        confidence: quality.confidence,
       },
-      warnings,
-      rejectReasons: hasBlockers ? ['PORTFOLIO_CONTEXT_INCOMPLETE'] : [],
+      warnings: quality.warnings,
+      rejectReasons: quality.rejectReasons,
       asOf: snapshot.snapshotTime,
     };
   }

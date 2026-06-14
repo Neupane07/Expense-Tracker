@@ -30,20 +30,22 @@ export class ToolExecutorService {
     rawInput: unknown,
   ): Promise<ToolEnvelope> {
     const definition = this.registry.get(toolName);
-    const parsedInput = this.parseInput(definition.inputSchema, rawInput);
-    const context = this.buildContext(user);
     const startedAt = Date.now();
+    const abortController = new AbortController();
     const auditRow = await this.audit.createPending({
       userId: user.id,
       toolName: definition.name,
       toolVersion: definition.version,
-      input: parsedInput,
+      input: rawInput ?? {},
     });
 
     try {
+      const parsedInput = this.parseInput(definition.inputSchema, rawInput);
+      const context = this.buildContext(user, abortController.signal);
       const handlerResult = await this.runWithTimeout(
         definition.handler(context, parsedInput),
         definition.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS,
+        abortController,
       );
       const outputParse = definition.outputSchema.safeParse(handlerResult.data);
 
@@ -110,11 +112,15 @@ export class ToolExecutorService {
     }
   }
 
-  private buildContext(user: AuthenticatedUser): ToolContext {
+  private buildContext(
+    user: AuthenticatedUser,
+    abortSignal: AbortSignal,
+  ): ToolContext {
     return {
       userId: user.id,
       userEmail: user.email,
       userRole: user.role,
+      abortSignal,
     };
   }
 
@@ -140,7 +146,11 @@ export class ToolExecutorService {
     return parsed.data as T;
   }
 
-  private async runWithTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  private async runWithTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    abortController: AbortController,
+  ) {
     let timeoutHandle: NodeJS.Timeout | undefined;
 
     try {
@@ -148,6 +158,7 @@ export class ToolExecutorService {
         promise,
         new Promise<T>((_, reject) => {
           timeoutHandle = setTimeout(() => {
+            abortController.abort();
             reject(new RequestTimeoutException('TOOL_EXECUTION_TIMEOUT'));
           }, timeoutMs);
         }),

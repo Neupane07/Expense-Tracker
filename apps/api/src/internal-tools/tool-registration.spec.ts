@@ -44,7 +44,10 @@ describe('ToolRegistrationService', () => {
         { provide: CandlesService, useValue: {} },
         { provide: IndicatorsService, useValue: {} },
         { provide: MarketDataQualityService, useValue: {} },
-        { provide: InstrumentVerificationService, useValue: {} },
+        {
+          provide: InstrumentVerificationService,
+          useValue: new InstrumentVerificationService(),
+        },
         { provide: ScannerReadinessService, useValue: {} },
         { provide: SwingScannerService, useValue: {} },
         { provide: TradeValidationService, useValue: {} },

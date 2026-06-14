@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { ValidateTradeInput } from '../../risk/risk.dto';
 import { TradeValidationService } from '../../risk/trade-validation.service';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
-import {
-  genericToolDataSchema,
-  validateTradeSetupInputSchema,
-} from '../tool-schemas';
+import { tradeValidationOutputSchema } from '../tool-output-schemas';
+import { validateTradeSetupInputSchema } from '../tool-schemas';
 
 @Injectable()
 export class ValidateTradeSetupTool {
@@ -18,7 +16,7 @@ export class ValidateTradeSetupTool {
       'Deterministic BUY/DELIVERY trade validation using shared risk engine (no broker calls).',
     readOnly: true as const,
     inputSchema: validateTradeSetupInputSchema,
-    outputSchema: genericToolDataSchema,
+    outputSchema: tradeValidationOutputSchema,
     handler: (context: ToolContext, input: ValidateTradeInput) =>
       this.handle(context, input),
   };

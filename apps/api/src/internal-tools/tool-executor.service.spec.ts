@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { ToolAuditService } from './tool-audit.service';
 import { ToolExecutorService } from './tool-executor.service';
 import { ToolRedactionService } from './tool-redaction.service';
@@ -67,14 +66,16 @@ describe('ToolExecutorService', () => {
     expect((envelope.data as { apiKey: string }).apiKey).toBe('[REDACTED]');
   });
 
-  it('normalizes invalid input as rejected envelope', async () => {
+  it('returns rejected envelope with audit for invalid input', async () => {
     const executor = buildExecutor({
       handler: () => Promise.resolve({ status: 'ok' as const, data: {} }),
     });
 
-    await expect(
-      executor.execute(user, 'demo_tool', { bad: true }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    const envelope = await executor.execute(user, 'demo_tool', { bad: true });
+
+    expect(envelope.status).toBe('rejected');
+    expect(envelope.auditId).toBe('audit-1');
+    expect(envelope.rejectReasons).toContain('INVALID_INPUT');
   });
 
   it('normalizes timeout errors', async () => {

@@ -1,12 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InstrumentVerificationService } from '../../market-data/instrument-verification.service';
 import { MarketDataService } from '../../market-data/market-data.service';
 import { ResearchSnapshotService } from '../../research/research-snapshot.service';
+import { evaluateCandleCorporateActionPolicy } from '../corporate-action-check';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
-import {
-  genericToolDataSchema,
-  symbolInputSchema,
-  type SymbolInput,
-} from '../tool-schemas';
+import { stockDeepDiveOutputSchema } from '../tool-output-schemas';
+import { symbolInputSchema, type SymbolInput } from '../tool-schemas';
 
 const MISSING_SECTIONS = {
   fundamentals: 'Automated fundamentals ingestion is not available.',
@@ -19,6 +18,7 @@ export class GetStockDeepDiveTool {
   constructor(
     private readonly marketData: MarketDataService,
     private readonly researchSnapshots: ResearchSnapshotService,
+    private readonly instrumentVerification: InstrumentVerificationService,
   ) {}
 
   readonly definition = {
@@ -28,7 +28,7 @@ export class GetStockDeepDiveTool {
       'Composes verified instrument, price, candle, indicator, and research outputs. Missing sections are disclosed; no invented fundamentals or news.',
     readOnly: true as const,
     inputSchema: symbolInputSchema,
-    outputSchema: genericToolDataSchema,
+    outputSchema: stockDeepDiveOutputSchema,
     handler: (context: ToolContext, input: SymbolInput) =>
       this.handle(context, input),
   };
@@ -81,14 +81,24 @@ export class GetStockDeepDiveTool {
         symbol,
         {},
       );
-      const candleCount = Array.isArray(
-        (sections.candles as { candles?: unknown[] })?.candles,
+      const candleRows = Array.isArray(
+        (sections.candles as { candles?: Array<{ isAdjusted?: boolean }> })
+          ?.candles,
       )
-        ? ((sections.candles as { candles: unknown[] }).candles.length ?? 0)
-        : 0;
-      if (candleCount === 0) {
+        ? ((sections.candles as { candles: Array<{ isAdjusted?: boolean }> })
+            .candles ?? [])
+        : [];
+      if (candleRows.length === 0) {
         rejectReasons.push('CANDLES_MISSING');
       }
+
+      const corporateAction = evaluateCandleCorporateActionPolicy(
+        this.instrumentVerification,
+        candleRows,
+      );
+      sections.corporateAction = corporateAction;
+      warnings.push(...corporateAction.warnings);
+      blockersFromCorporateAction(corporateAction, rejectReasons);
     } catch (error) {
       if (error instanceof NotFoundException) {
         sections.candles = null;
@@ -144,10 +154,14 @@ export class GetStockDeepDiveTool {
     }
 
     const status =
-      rejectReasons.length > 0 ? 'rejected' : warnings.length > 0 ? 'ok' : 'ok';
+      sections.instrument == null
+        ? 'unavailable'
+        : rejectReasons.length > 0
+          ? 'rejected'
+          : 'ok';
 
     return {
-      status: sections.instrument == null ? 'unavailable' : status,
+      status,
       data: {
         symbol,
         sections,
@@ -160,5 +174,18 @@ export class GetStockDeepDiveTool {
       rejectReasons: [...new Set(rejectReasons)],
       asOf: new Date(),
     };
+  }
+}
+
+function blockersFromCorporateAction(
+  corporateAction: {
+    blockers: string[];
+    blocksHistoricalAnalysis: boolean;
+  },
+  rejectReasons: string[],
+) {
+  rejectReasons.push(...corporateAction.blockers);
+  if (corporateAction.blocksHistoricalAnalysis) {
+    rejectReasons.push('HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT');
   }
 }

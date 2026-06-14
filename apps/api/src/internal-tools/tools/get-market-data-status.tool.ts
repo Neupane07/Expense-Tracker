@@ -8,11 +8,12 @@ import { CandlesService } from '../../market-data/candles.service';
 import { IndicatorsService } from '../../market-data/indicators.service';
 import { PricesService } from '../../market-data/prices.service';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
+import { evaluateCandleCorporateActionPolicy } from '../corporate-action-check';
 import {
-  genericToolDataSchema,
   marketDataStatusInputSchema,
   type MarketDataStatusInput,
 } from '../tool-schemas';
+import { marketDataStatusOutputSchema } from '../tool-output-schemas';
 
 @Injectable()
 export class GetMarketDataStatusTool {
@@ -33,7 +34,7 @@ export class GetMarketDataStatusTool {
       'Read-only market-data readiness for holdings or explicit symbols (mapping, price, candles, indicators).',
     readOnly: true as const,
     inputSchema: marketDataStatusInputSchema,
-    outputSchema: genericToolDataSchema,
+    outputSchema: marketDataStatusOutputSchema,
     handler: (context: ToolContext, input: MarketDataStatusInput) =>
       this.handle(context, input),
   };
@@ -44,7 +45,13 @@ export class GetMarketDataStatusTool {
   ): Promise<ToolHandlerResult> {
     const asOf = new Date();
     const universe = await this.resolveUniverse(context.userId, input);
-    const symbols: Array<Record<string, unknown>> = [];
+    const symbols: Array<{
+      symbol: string;
+      status: string;
+      warnings: string[];
+      blockers: string[];
+      [key: string]: unknown;
+    }> = [];
     const warnings: string[] = [];
     const rejectReasons: string[] = [];
 
@@ -52,8 +59,9 @@ export class GetMarketDataStatusTool {
       return {
         status: 'unavailable',
         data: {
-          symbols: [],
+          universe: [],
           universeSource: input.symbols?.length ? 'symbols' : 'holdings',
+          symbols: [],
         },
         dataQuality: { freshness: 'MISSING', confidence: 'LOW' },
         warnings: ['MARKET_DATA_UNIVERSE_EMPTY'],
@@ -129,12 +137,23 @@ export class GetMarketDataStatusTool {
         normalizedSymbol,
         {},
       );
-      const candleCount = Array.isArray(candleResponse.candles)
-        ? candleResponse.candles.length
-        : 0;
+      const candleRows = Array.isArray(candleResponse.candles)
+        ? candleResponse.candles
+        : [];
+      const candleCount = candleRows.length;
       warnings.push(...this.marketQuality.candleWarnings(candleCount));
       if (candleCount === 0) {
         blockers.push('CANDLES_MISSING');
+      }
+
+      const corporateAction = evaluateCandleCorporateActionPolicy(
+        this.instrumentVerification,
+        candleRows,
+      );
+      warnings.push(...corporateAction.warnings);
+      blockers.push(...corporateAction.blockers);
+      if (corporateAction.blocksHistoricalAnalysis) {
+        blockers.push('HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT');
       }
 
       const indicatorResponse = await this.indicators.getLatest(
@@ -162,6 +181,7 @@ export class GetMarketDataStatusTool {
           freshness: priceQuality.dataQuality.freshness,
         },
         candles: { count: candleCount },
+        corporateAction,
         indicators: {
           present: Boolean(indicatorResponse.indicators),
           asOf: indicatorResponse.indicators?.asOfDate ?? null,

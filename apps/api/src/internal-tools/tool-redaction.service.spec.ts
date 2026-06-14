@@ -38,17 +38,33 @@ describe('ToolRedactionService', () => {
     expect(hashA).not.toEqual(hashB);
   });
 
-  it('summarizes input meta with key names only', () => {
+  it('stores audit metadata as keys and field types only', () => {
     const meta = service.buildInputMeta({
       symbol: 'INFY',
       entry: 1500,
+      target: 1600,
+      stopLoss: 1450,
+      quantity: 10,
       accessToken: 'should-not-appear',
     });
 
-    expect(meta.keys).toEqual(['accessToken', 'entry', 'symbol']);
+    expect(meta.keys).toEqual([
+      'accessToken',
+      'entry',
+      'quantity',
+      'stopLoss',
+      'symbol',
+      'target',
+    ]);
+    expect(JSON.stringify(meta)).not.toContain('1500');
     expect(JSON.stringify(meta)).not.toContain('should-not-appear');
-    expect((meta.preview as Record<string, unknown>).accessToken).toBe(
-      '[REDACTED]',
-    );
+    expect(meta.fieldTypes).toEqual({
+      accessToken: 'redacted',
+      entry: 'redacted',
+      quantity: 'redacted',
+      stopLoss: 'redacted',
+      symbol: 'string',
+      target: 'redacted',
+    });
   });
 });

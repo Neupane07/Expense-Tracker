@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ScannerReadinessService } from '../../scanner/scanner-readiness.service';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
+import { scannerReadinessOutputSchema } from '../tool-output-schemas';
 import {
-  genericToolDataSchema,
   scannerReadinessInputSchema,
   type ScannerReadinessInput,
 } from '../tool-schemas';
@@ -18,7 +18,7 @@ export class GetScannerReadinessTool {
       'Deterministic scanner readiness diagnostics for credentials, sync, mapping, prices, candles, indicators, research, and portfolio context.',
     readOnly: true as const,
     inputSchema: scannerReadinessInputSchema,
-    outputSchema: genericToolDataSchema,
+    outputSchema: scannerReadinessOutputSchema,
     handler: (context: ToolContext, input: ScannerReadinessInput) =>
       this.handle(context, input),
   };

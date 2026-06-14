@@ -6,6 +6,7 @@ export type ToolContext = {
   userId: string;
   userEmail: string;
   userRole: string;
+  abortSignal?: AbortSignal;
 };
 
 export type ToolHandlerResult<TData = unknown> = {

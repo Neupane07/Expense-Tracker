@@ -26,6 +26,7 @@ describe('Tool handlers', () => {
         warnings: ['No synced Dhan holdings are available.'],
         source: {},
         priceAsOf: null,
+        listedSummary: { fallbackCount: 0, holdingCount: 0 },
       }),
     } as unknown as PortfolioService);
 
@@ -33,6 +34,24 @@ describe('Tool handlers', () => {
 
     expect(result.status).toBe('unavailable');
     expect(result.rejectReasons).toContain('PORTFOLIO_CONTEXT_INCOMPLETE');
+  });
+
+  it('get_portfolio_snapshot returns rejected for stale prices', async () => {
+    const tool = new GetPortfolioSnapshotTool({
+      getSnapshot: jest.fn().mockResolvedValue({
+        id: 'snap-1',
+        snapshotTime: new Date('2026-06-14T00:00:00.000Z'),
+        warnings: ['PRICE_STALE'],
+        listedSummary: { fallbackCount: 0, holdingCount: 2 },
+        priceAsOf: new Date('2026-06-14T00:00:00.000Z'),
+        source: {},
+      }),
+    } as unknown as PortfolioService);
+
+    const result = await tool.handle(context);
+
+    expect(result.status).toBe('rejected');
+    expect(result.rejectReasons).toContain('PRICE_STALE');
   });
 
   it('get_scanner_readiness maps BLOCKED to unavailable', async () => {

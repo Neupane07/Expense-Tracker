@@ -502,4 +502,22 @@ describe('SwingScannerService', () => {
     expect(candidate?.confidenceCapReason).toContain('STALE_RESEARCH_EVIDENCE');
     expect(candidate?.researchFreshness).toBe('stale');
   });
+
+  it('does not persist a scan run when aborted before completion', async () => {
+    const { service, prisma } = createService();
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(
+      service.runScan(
+        'user-1',
+        { symbols: ['INFY'] },
+        {
+          abortSignal: abortController.signal,
+        },
+      ),
+    ).rejects.toThrow('SCAN_ABORTED_TIMEOUT');
+
+    expect(prisma.swingScanRun.create).not.toHaveBeenCalled();
+  });
 });

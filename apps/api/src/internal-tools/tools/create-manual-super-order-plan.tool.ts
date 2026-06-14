@@ -2,10 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { ValidateTradeInput } from '../../risk/risk.dto';
 import { TradeValidationService } from '../../risk/trade-validation.service';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
-import {
-  createManualSuperOrderPlanInputSchema,
-  genericToolDataSchema,
-} from '../tool-schemas';
+import { manualSuperOrderPlanOutputSchema } from '../tool-output-schemas';
+import { createManualSuperOrderPlanInputSchema } from '../tool-schemas';
 
 const MANUAL_PLACEMENT_DISCLAIMER =
   'Manual Super Order parameters only. Finance OS does not place, modify, or cancel broker orders.';
@@ -21,7 +19,7 @@ export class CreateManualSuperOrderPlanTool {
       'Formats BUY/DELIVERY/DAY Super Order parameters after shared validation. No Dhan order call.',
     readOnly: true as const,
     inputSchema: createManualSuperOrderPlanInputSchema,
-    outputSchema: genericToolDataSchema,
+    outputSchema: manualSuperOrderPlanOutputSchema,
     handler: (context: ToolContext, input: ValidateTradeInput) =>
       this.handle(context, input),
   };

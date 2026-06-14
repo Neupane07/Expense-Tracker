@@ -1,11 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ResearchSnapshotService } from '../../research/research-snapshot.service';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
-import {
-  genericToolDataSchema,
-  symbolInputSchema,
-  type SymbolInput,
-} from '../tool-schemas';
+import { researchSnapshotOutputSchema } from '../tool-output-schemas';
+import { symbolInputSchema, type SymbolInput } from '../tool-schemas';
 
 @Injectable()
 export class GetResearchSnapshotTool {
@@ -18,7 +15,7 @@ export class GetResearchSnapshotTool {
       'Deterministic per-symbol research rollup from user-stored evidence only.',
     readOnly: true as const,
     inputSchema: symbolInputSchema,
-    outputSchema: genericToolDataSchema,
+    outputSchema: researchSnapshotOutputSchema,
     handler: (context: ToolContext, input: SymbolInput) =>
       this.handle(context, input),
   };

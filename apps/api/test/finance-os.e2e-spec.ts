@@ -409,4 +409,19 @@ describe('Finance OS authenticated boundaries (e2e)', () => {
       .send({})
       .expect(404);
   });
+
+  it('returns rejected tool envelope for invalid execute input', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/tools/validate_trade_setup/execute')
+      .set('Cookie', sessionCookie('user-a'))
+      .send({ symbol: 'INFY' })
+      .expect(201);
+
+    expect(response.body).toMatchObject({
+      tool: 'validate_trade_setup',
+      status: 'rejected',
+      auditId: 'audit-1',
+      rejectReasons: ['INVALID_INPUT'],
+    });
+  });
 });
