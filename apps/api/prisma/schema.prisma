@@ -85,6 +85,7 @@ model User {
   tradeJournalEntries     TradeJournalEntry[]
   researchItems           ResearchItem[]
   researchSnapshots       ResearchSnapshot[]
+  toolExecutionAudits     ToolExecutionAudit[]
   invitationsCreated      Invitation[]             @relation("InvitationCreator")
   invitationAccepted      Invitation?              @relation("InvitationAccepted")
   createdAt               DateTime                 @default(now())
@@ -770,4 +771,36 @@ model ResearchSnapshot {
 
   @@index([userId, symbol, createdAt])
   @@index([instrumentId])
+}
+
+enum ToolExecutionStatus {
+  OK
+  REJECTED
+  UNAVAILABLE
+  ERROR
+}
+
+/// Persisted metadata for internal read-only tool executions.
+/// Retention: prune rows older than 90 days via scheduled job (not yet implemented).
+/// Indexes support per-user history and tool-name filtering.
+model ToolExecutionAudit {
+  id           String              @id @default(cuid())
+  userId       String
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolName     String
+  toolVersion  String
+  status       ToolExecutionStatus
+  startedAt    DateTime
+  completedAt  DateTime?
+  durationMs   Int?
+  inputHash    String?
+  inputMeta    Json?
+  warningCount Int                 @default(0)
+  rejectCount  Int                 @default(0)
+  errorCode    String?
+  createdAt    DateTime            @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, toolName, createdAt(sort: Desc)])
+  @@index([createdAt])
 }

@@ -1,237 +1,199 @@
-# Architecture
+# Finance OS Architecture
 
-## Product Direction
+## Architectural Style
 
-This repository is being evolved from an Expense Tracker into a broader personal finance platform called Finance OS.
+Finance OS is a TypeScript modular monolith. The React app is a presentation
+client; NestJS owns parsing, validation, deduplication, categorization,
+portfolio calculations, market-data quality, scanner orchestration, research
+rollups, and risk rules. PostgreSQL via Prisma is the source of truth.
 
-Finance OS is a modular personal finance application with these major areas:
+Do not split into microservices until deployment or scaling evidence requires
+it. A future MCP process may be separate for transport/security, but it must
+reuse the API's internal tool contracts.
 
-- Expenses
-- Portfolio tracking
-- Broker integrations
-- Market data
-- Swing trade research
-- Long-term investment research
-- Risk management
-- Trade journal
-- Read-only AI/MCP tools
-
-The existing expense tracker is the first completed module. It must continue working while new modules are added.
-
-## Repository Structure
-
-Current app structure:
+## Repository
 
 ```text
 apps/
-  web/    React frontend
-  api/    NestJS backend
-
-docs/
-deploy/
-.github/workflows/
-docker-compose.yml
-pnpm-workspace.yaml
+  api/                 NestJS application and domain modules
+  web/                 Vite React application
+docs/                  product, state, module, and operation documentation
+deploy/                production Docker Compose support
 ```
 
-Future structure may add:
+Possible later additions:
 
 ```text
 apps/
-  worker/       Background jobs for sync/scans
-  mcp-server/   Read-only MCP tools for AI access
-
+  worker/              scheduled provider sync, only when request-driven sync is insufficient
+  mcp-server/          thin read-only transport adapter
 packages/
-  shared/       Shared types/schemas/constants
+  tool-contracts/      only if API and MCP require a shared package boundary
 ```
 
-Do not add `worker` or `mcp-server` until the API module foundations are stable.
+Do not create these merely to match a diagram.
 
-## Architecture Style
-
-Finance OS should start as a modular monolith, not full microservices.
-
-Use clear backend modules inside `apps/api/src`:
+## Current Module Boundaries
 
 ```text
-src/
-  app.module.ts
+auth                  identity, invitations, sessions, guards
+accounts              expense account ownership
+imports               statement reading, parsing, normalization, persistence
+transactions          transaction query and manual categorization
+rules                 user categorization rules and explicit apply
+dashboard             expense summaries and charts
 
-  prisma/
-  auth/
-
-  expenses/
-  portfolio/
-  broker/
-  market-data/
-  scanner/
-  risk/
-  trade-journal/
-  research/
+broker                encrypted credentials and read-only provider sync
+portfolio             holdings/MF valuation and snapshots
+market-data           instruments, prices, candles, indicators, quality
+risk                  sizing, setup validation, exposure
+scanner               deterministic setup detection and orchestration
+research              dated evidence and deterministic snapshots
+trade-journal         manual plan and review lifecycle
 ```
 
-Each module should own its controllers, services, DTOs, and tests.
+Expense modules should remain structurally independent. Do not move them under
+a new directory solely for naming consistency.
 
-Do not mix expense import logic with portfolio or market-data logic.
+## Dependency Direction
 
-## Existing Completed Module
+```text
+web -> authenticated HTTP controllers -> application/domain services -> Prisma
 
-The existing expense tracker includes:
+scanner -> instrument + market-data + portfolio/exposure + risk + research
+trade-journal -> instrument + risk + persisted scanner result
+portfolio -> broker query data + market-data valuation + mutual-fund NAV
+research -> instrument mapping (optional) + research persistence
+```
 
-- Google-authenticated user sessions
-- XLS statement imports
-- Bank/card parsers
-- Transaction normalization
-- Deduplication
-- Rule-based categorization
-- Expense dashboard
+Rules:
 
-Expense-specific details are documented in `docs/EXPENSE_MODULE.md`.
+- Market data does not calculate scanner scores.
+- Risk does not call broker write APIs.
+- Scanner does not duplicate risk math.
+- Frontend does not recompute domain decisions.
+- Provider clients do not leak credentials or raw secrets beyond the server.
+- AI adapters call internal tools, never provider clients or Prisma directly.
 
-## Planned Backend Modules
+## Data Ownership and Security
 
-### auth
+- Financial routes derive `userId` from the authenticated server session.
+- Browser authentication uses an opaque Secure HttpOnly cookie.
+- Broker credentials are encrypted with AES-256-GCM and responses expose only
+  masks/status metadata.
+- Broker raw payloads may be stored for reconciliation/debugging, but must not
+  include application-managed secret material.
+- All future tool calls and MCP calls require explicit user identity and an
+  auditable authorization decision.
 
-Owns authentication, session handling, user identity, roles, and authorization guards.
+## Data Quality Architecture
 
-Authentication rules:
+Data quality is part of the domain response, not a UI decoration.
 
-- Browser receives only an opaque Secure HttpOnly session cookie.
-- No application token should be stored in `localStorage`.
-- All financial modules must derive `userId` from the authenticated session.
-- Public routes must be minimal.
+Relevant outputs should include:
 
-### expenses
+```text
+source/provider
+asOf/timestamp
+freshness
+mapping status
+warnings
+reject reasons
+confidence cap and reason
+```
 
-Owns imports, parsers, transactions, categorization rules, and expense dashboard.
+The system follows fail-closed decision rules:
 
-Existing behavior must not break during Finance OS migration.
+- uncertain security mapping: reject
+- stale/missing required price: reject
+- missing required candles: reject
+- unknown corporate-action adjustment when history matters: reject
+- fallback/unofficial optional inputs: warn and cap confidence
+- missing portfolio/research context: disclose and avoid complete-confidence claims
 
-### portfolio
+The current code implements much of this per module, but Phase 8 of the roadmap
+should unify terminology and readiness reporting.
 
-Owns holdings, portfolio snapshots, mutual fund values, cash, allocation, P&L, asset-class exposure, and portfolio history.
+## Internal Tool Architecture
 
-It must not fetch market data directly. It should use market-data services for prices and instruments.
+Phase 9 implements the internal tool layer as a NestJS `internal-tools` module:
 
-### broker
+```text
+Tool Tester HTTP/UI ----+        (Phase 10 — not built)
+                       |
+Future MCP adapter -----+-> InternalToolsController
+                              -> ToolRegistryService
+                              -> ToolExecutorService
+                              -> ToolAuditService + ToolRedactionService
+                              -> existing domain services -> Prisma/providers
+```
 
-Owns broker integrations, starting with Dhan.
+A tool definition contains:
 
-Responsibilities:
+- stable name and version
+- description and research-only classification
+- input and output schemas
+- handler that composes existing services
+- timeout and redaction policy
 
-- Dhan holdings sync
-- Dhan positions sync
-- Dhan orders/trades read-only sync
-- Security master/instrument mapping
-- Cash/margin snapshot
+The registry is not a second business-logic layer. For example,
+`validate_trade_setup` calls `TradeValidationService`; it does not recalculate
+risk/reward itself.
 
-V1 must be read-only. No automated order placement.
+## MCP Boundary
 
-### market-data
+MCP is transport, not domain architecture. It may expose an approved subset of
+registered read-only tools after Tool Tester acceptance. MCP must not:
 
-Owns instruments, prices, candles, technical indicators, index data, sector data, and data freshness metadata.
+- query Prisma directly
+- copy scanner/risk calculations
+- expose session cookies or broker credentials
+- create/update journal records in initial scope
+- place, modify, cancel, or trail orders
 
-Every price/candle response must include:
+## External Providers
 
-- source
-- timestamp
-- freshness status
-- confidence level
+Current:
 
-### scanner
+- Dhan read-only broker/account and market-data APIs
+- AMFI NAV text feed
+- manual/user-URL research evidence
 
-Owns swing trade scans and long-term investment candidate scans.
+Partial or missing:
 
-Scanner must not invent data. It can only score candidates using verified data supplied by portfolio, market-data, research, and risk.
+- comprehensive instrument master
+- corporate actions
+- official filings
+- licensed/curated news
+- index, sector, global-cue, and flow data
 
-### risk
+Provider additions require explicit source, timestamp, freshness policy,
+rate/failure handling, and raw-data retention rules before scanner integration.
 
-Owns position sizing, trade validation, exposure limits, concentration checks, and risk/reward calculations.
+## Persistence
 
-Risk rules must be deterministic and test-covered.
+Follow the repository's current Prisma setup:
 
-### trade-journal
+- database URL remains in `prisma.config.ts`, not `schema.prisma`
+- generated client output remains `../src/generated/prisma`
+- import `PrismaClient` from generated code, not `@prisma/client`
+- instantiate with `@prisma/adapter-pg`
+- keep `ConfigModule` global
 
-Owns manual trade plans, executed trades, exit reasons, mistakes, screenshots/notes, and post-trade review.
+Schema changes require a migration and updates to `docs/DATA_MODEL.md` and
+`docs/MIGRATION_NOTES.md`.
 
-### research
+## Runtime Model
 
-Owns company filings, news summaries, result highlights, red flags, and dated evidence.
-
-Research output must distinguish facts from inference.
-
-## Data Quality Rules
-
-The system must label data quality explicitly.
-
-A scanner result must include:
-
-- priceSource
-- priceTimestamp
-- technicalSource
-- filingSource
-- newsSource
-- confidenceCapReason
-
-If live or recent price data is unavailable, scanner confidence must be capped.
-
-If symbol/security mapping is uncertain, trade validation must reject the setup.
-
-If corporate action status is uncertain, trade validation must reject the setup.
+Current synchronization is explicit/request-driven. A worker should be added
+only when scheduled freshness is required. It should invoke the same provider
+and domain services, use idempotent jobs, and write freshness/failure metadata.
 
 ## Trading Boundary
 
-V1 is research-only.
+Allowed outputs include portfolio state, scanner candidates, deterministic
+validation, suggested quantity, and manual Dhan Super Order parameters.
 
-The system must not place buy/sell orders automatically.
-
-Allowed:
-
-- Show portfolio snapshot
-- Show active trades
-- Generate swing trade candidates
-- Generate suggested Dhan Super Order parameters
-- Validate risk/reward
-- Suggest position size
-
-Not allowed in V1:
-
-- Auto-buy
-- Auto-sell
-- Auto-modify stop loss
-- Unattended trading
-- MTF/leverage recommendation
-- F&O recommendation
-
-The user must manually verify and place all orders in Dhan.
-
-## Frontend Direction
-
-The web app should become a Finance OS shell with modules:
-
-- Overview
-- Expenses
-- Portfolio
-- Swing Scanner
-- Watchlist
-- Trade Journal
-- Research
-- Settings
-
-Existing expense pages should move under the Expenses section without behavior changes.
-
-## Migration Strategy
-
-Migration must happen in safe steps:
-
-- Update docs.
-- Add placeholder modules only.
-- Keep existing expense functionality working.
-- Add portfolio snapshot.
-- Add broker read-only sync.
-- Add market data.
-- Add scanner.
-- Add risk engine.
-- Add MCP read-only tools.
-
-Every structural change must be documented in `docs/MIGRATION_NOTES.md`.
+The application has no normal path for broker writes. Automated order
+placement, modification, cancellation, stop-loss trailing, MTF/leverage, and
+F&O remain outside the architecture.

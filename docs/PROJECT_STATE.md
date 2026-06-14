@@ -2,10 +2,10 @@
 
 ## Snapshot
 
-Repository inspection date: 2026-06-13
+Repository inspection date: 2026-06-14
 
-Phase 8 current-state hardening is implemented on the working tree described in
-this document.
+Phase 8 current-state hardening and Phase 9 internal read-only tools are
+implemented on the working tree described in this document.
 
 ## Executive Summary
 
@@ -15,8 +15,7 @@ mutual-fund valuation, market-data, risk, scanner readiness, trade-journal, and
 manual research foundations with browser pages and unit/e2e tests.
 
 It is not yet the full target system. The largest missing architectural piece
-is the internal read-only AI tool layer and tester UI. MCP should not be built
-directly on controllers before that layer exists. Important domain gaps also
+is the Tool Tester UI and read-only MCP adapter. Important domain gaps also
 remain in instrument-master coverage, corporate-action ingestion, automated
 research sources, market regime/sector breadth, and broad scanner universe
 expansion.
@@ -55,7 +54,7 @@ expansion.
 - explicit rejection of stale/missing prices, bad geometry, low R:R,
   insufficient cash, non-delivery products, MTF, and F&O
 
-### Scanner, journal, and research
+### Scanner, journal, research, and internal tools
 
 - deterministic `BREAKOUT`, `PULLBACK_TO_SUPPORT`, and `RSI_REVERSAL` detectors
 - scan over current synced holdings or explicit user symbols
@@ -67,6 +66,12 @@ expansion.
 - user-entered dated research items/evidence and deterministic snapshots
 - research freshness/risk flags integrated into scanner confidence
 - functional `/scanner`, `/trade-journal`, and `/research` pages
+- canonical internal read-only tool registry with versioned Zod schemas,
+  standard response envelope, redaction, timeout/result-size controls, and
+  persisted execution audit metadata
+- eight initial tools over portfolio, market-data status, scanner readiness,
+  swing scan, trade validation, stock deep dive, research snapshot, and manual
+  Super Order plan formatting (no broker calls)
 
 ## Partial
 
@@ -119,7 +124,8 @@ expansion.
 
 - Backend unit coverage is substantial for core calculations and ownership.
 - Authenticated Finance OS e2e tests cover session boundaries, broker credential
-  redaction, user-scoped journal access, and scanner readiness.
+  redaction, user-scoped journal access, scanner readiness, and internal tool
+  catalog/audit/execute boundaries.
 - Focused web tests cover research-only disclaimers and warning/reject/readiness
   rendering via Vitest + Testing Library.
 - No background worker/scheduler exists for broker, NAV, market, or research
@@ -127,13 +133,8 @@ expansion.
 
 ## Missing
 
-- internal read-only tool registry and versioned tool contracts
-- standard AI/tool response envelope
-- tool execution audit model/service
 - Tool Tester UI
 - read-only MCP server/adapter
-- stock deep-dive aggregation contract
-- canonical manual Super Order plan service independent of scanner presentation
 - instrument-master and corporate-action ingestion pipelines
 - official/licensed filing and news ingestion
 - market regime, index/sector strength, and broad scanner universe
@@ -150,8 +151,8 @@ rules                 dashboard
 portfolio             broker/dhan
 market-data           risk
 scanner               trade-journal
-research              prisma
-health
+research              internal-tools
+prisma                health
 ```
 
 All financial controllers use the session guard. `ConfigModule` is global and

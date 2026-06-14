@@ -34,7 +34,7 @@ Exit gate:
 
 ## Phase 9: Internal Read-Only Tools
 
-Status: Next
+Status: Complete
 
 Goal: create the canonical AI-facing application contract without MCP.
 
@@ -57,7 +57,7 @@ Exit gate:
 
 ## Phase 10: Tool Tester UI
 
-Status: Planned
+Status: Next
 
 Goal: prove internal tools in the browser before external exposure.
 

@@ -18,5 +18,6 @@ import { PortfolioService } from './portfolio.service';
     MutualFundsService,
     HoldingsValuationService,
   ],
+  exports: [PortfolioService, PortfolioSnapshotService],
 })
 export class PortfolioModule {}

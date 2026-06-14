@@ -78,15 +78,34 @@ These concepts are not present in the current schema:
 - corporate actions and candle-adjustment verification records
 - index/sector time series and market-regime snapshots
 - instrument-master import/sync runs
-- internal tool definitions/versions and execution audit records
 - MCP credentials/allowlists, if a separate deployment later requires them
+
+## Internal Tools and Audit (Phase 9)
+
+Tool definitions are code-defined in `apps/api/src/internal-tools`. Execution
+audits are persisted:
+
+- `ToolExecutionAudit`: user-scoped metadata for each tool run
+  (`userId`, `toolName`, `toolVersion`, `status`, `startedAt`, `completedAt`,
+  `durationMs`, `inputHash`, redacted `inputMeta`, warning/reject counts,
+  `errorCode`)
+- Enum `ToolExecutionStatus`: `OK`, `REJECTED`, `UNAVAILABLE`, `ERROR`
+
+Retention: prune `ToolExecutionAudit` rows older than 90 days via a scheduled
+job (not yet implemented). Indexes support per-user history and tool-name
+filtering. Audits must not store credentials, session cookies, access tokens,
+or unredacted sensitive payloads.
+
+Previously missing (now implemented):
+
+- internal tool execution audit records
 
 Active-trade reconciliation is computed at read time from `TradeJournalEntry`
 and broker position snapshots; there is no separate active-trade table yet.
 
-Add models only in the phase that owns their behavior. Tool definitions may be
-code-defined, but execution audits should be persisted with user, tool name,
-version, timing, status, redacted input/output metadata, and timestamps.
+Add models only in the phase that owns their behavior. Tool definitions remain
+code-defined; execution audits are persisted with user, tool name, version,
+timing, status, redacted input metadata, and timestamps.
 
 ## Prisma Rules
 

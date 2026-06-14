@@ -344,6 +344,88 @@ Research checks should show:
 - summaries derived only from stored item text (no AI-generated facts)
 - no order placement, MCP, or broker secrets in responses
 
+## Internal read-only tool tests (Phase 9)
+
+List the tool catalog:
+
+```bash
+curl -i \
+  -H "Cookie: expense_session=<session-cookie>" \
+  http://localhost:4000/tools
+```
+
+Inspect a single tool schema:
+
+```bash
+curl -i \
+  -H "Cookie: expense_session=<session-cookie>" \
+  http://localhost:4000/tools/validate_trade_setup
+```
+
+Execute scanner readiness through the tool envelope:
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/tools/get_scanner_readiness/execute \
+  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Execute trade validation (rejected path example):
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/tools/validate_trade_setup/execute \
+  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "INFY",
+    "side": "BUY",
+    "entry": 100,
+    "target": 105,
+    "stopLoss": 99,
+    "product": "DELIVERY"
+  }'
+```
+
+Manual Super Order plan (formats parameters only; no broker call):
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/tools/create_manual_super_order_plan/execute \
+  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "INFY",
+    "side": "BUY",
+    "entry": 1500,
+    "target": 1600,
+    "stopLoss": 1450,
+    "quantity": 5,
+    "product": "DELIVERY"
+  }'
+```
+
+List redacted audit history:
+
+```bash
+curl -i \
+  -H "Cookie: expense_session=<session-cookie>" \
+  http://localhost:4000/tools/audits
+```
+
+Tool checks should show:
+
+- envelope fields: `tool`, `version`, `asOf`, `status`, `data`, `dataQuality`,
+  `warnings`, `rejectReasons`, `auditId`, `durationMs`
+- `status` of `ok`, `rejected`, `unavailable`, or `error`
+- no `apiKey`, `apiSecret`, `accessToken`, or session cookie values in responses
+  or audit listings
+- `POST /tools/place_order/execute` returns 404 (forbidden tool name)
+- audit records contain metadata only (no full financial output payload)
+- `validate_trade_setup` and `POST /risk/validate-trade` agree for the same input
+
 ## Trade journal tests
 
 List journal entries:
