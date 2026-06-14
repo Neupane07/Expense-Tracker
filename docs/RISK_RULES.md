@@ -8,6 +8,12 @@ These rules are more important than scanner confidence.
 
 A trade with a high score must still be rejected if it violates risk rules.
 
+Implementation note: trade geometry, R:R, cash, position sizing, stale price,
+product, MTF/F&O, and concentration checks are implemented. Canonical
+active-trade reconciliation, stop-loss portfolio heat, and corporate-action
+readiness blockers are implemented in Phase 8. Persisted per-user risk
+settings remain roadmap work.
+
 ## Global Rules
 
 V1 rules:

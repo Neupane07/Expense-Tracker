@@ -20,9 +20,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { apiPostJson } from "@/lib/api-client"
+import { apiGet, apiPostJson } from "@/lib/api-client"
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/format"
 import { useApiQuery } from "@/lib/use-api-query"
+import {
+  DataQualityBadges,
+  ReadinessStatusBadge,
+  RejectReasonList,
+  ResearchDisclaimer,
+  WarningsList,
+} from "@/components/finance/finance-quality"
 import { EmptyState, ErrorState, LoadingState } from "./page-state"
 
 type SwingCandidate = {
@@ -90,6 +97,22 @@ type SwingCandidatesResponse = {
   researchDisclaimer: string
 }
 
+type ScannerReadinessResponse = {
+  status: "READY" | "DEGRADED" | "BLOCKED"
+  universe: string[]
+  universeSource: "holdings" | "symbols"
+  warnings: string[]
+  blockers: string[]
+  checks: Array<{
+    id: string
+    label: string
+    status: "READY" | "DEGRADED" | "BLOCKED"
+    warnings: string[]
+    blockers: string[]
+  }>
+  researchDisclaimer: string
+}
+
 function statusVariant(status: SwingCandidate["status"]) {
   if (status === "candidate") {
     return "default" as const
@@ -116,6 +139,7 @@ function freshnessVariant(freshness: string) {
 
 export function SwingScannerPage() {
   const [symbolInput, setSymbolInput] = useState("")
+  const [readinessSymbols, setReadinessSymbols] = useState<string[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
@@ -123,9 +147,42 @@ export function SwingScannerPage() {
   const [journalMessage, setJournalMessage] = useState<string | null>(null)
   const [isSavingJournal, setIsSavingJournal] = useState(false)
 
+  const readinessPath = useMemo(() => {
+    if (readinessSymbols.length > 0) {
+      return `/scanner/readiness?symbols=${encodeURIComponent(readinessSymbols.join(","))}`
+    }
+
+    return "/scanner/readiness"
+  }, [readinessSymbols])
+
   const candidatesQuery = useApiQuery<SwingCandidatesResponse>(
     "/scanner/swing/candidates",
   )
+  const readinessQuery = useApiQuery<ScannerReadinessResponse>(readinessPath)
+
+  const explicitSymbols = useMemo(
+    () =>
+      symbolInput
+        .split(/[,\s]+/)
+        .map((value) => value.trim().toUpperCase())
+        .filter(Boolean),
+    [symbolInput],
+  )
+
+  const readinessAppliesToSubmitUniverse = useMemo(() => {
+    if (explicitSymbols.length > 0) {
+      return (
+        readinessSymbols.length > 0 &&
+        readinessSymbols.join(",") === explicitSymbols.join(",")
+      )
+    }
+
+    return readinessSymbols.length === 0
+  }, [explicitSymbols, readinessSymbols])
+
+  const scanBlocked =
+    readinessAppliesToSubmitUniverse &&
+    readinessQuery.data?.status === "BLOCKED"
 
   const candidates = useMemo(
     () => lastRun?.candidates ?? candidatesQuery.data?.candidates ?? [],
@@ -196,6 +253,21 @@ export function SwingScannerPage() {
         .split(/[,\s]+/)
         .map((value) => value.trim().toUpperCase())
         .filter(Boolean)
+      setReadinessSymbols(symbols)
+
+      const readinessPathForRun =
+        symbols.length > 0
+          ? `/scanner/readiness?symbols=${encodeURIComponent(symbols.join(","))}`
+          : "/scanner/readiness"
+      const readiness = await apiGet<ScannerReadinessResponse>(readinessPathForRun)
+
+      if (readiness.status === "BLOCKED") {
+        setScanError(
+          `Scanner blocked: ${readiness.blockers.join(", ") || "readiness checks failed"}`,
+        )
+        return
+      }
+
       const payload =
         symbols.length > 0 ? { symbols, universe: "symbols" as const } : {}
 
@@ -221,7 +293,7 @@ export function SwingScannerPage() {
   const disclaimer =
     lastRun?.researchDisclaimer ??
     candidatesQuery.data?.researchDisclaimer ??
-    "Research only — verify and place manually in Dhan."
+    readinessQuery.data?.researchDisclaimer
 
   return (
     <div className="space-y-4">
@@ -237,9 +309,24 @@ export function SwingScannerPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-            {disclaimer}
-          </p>
+          <ResearchDisclaimer text={disclaimer} />
+
+          {readinessQuery.data ? (
+            <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">Scanner readiness</span>
+                <ReadinessStatusBadge status={readinessQuery.data.status} />
+                <Badge variant="outline">
+                  {readinessQuery.data.universeSource} ·{" "}
+                  {readinessQuery.data.universe.length} symbols
+                </Badge>
+              </div>
+              <WarningsList warnings={readinessQuery.data.warnings} />
+              <RejectReasonList reasons={readinessQuery.data.blockers} />
+            </div>
+          ) : readinessQuery.isLoading ? (
+            <LoadingState message="Checking scanner readiness" />
+          ) : null}
 
           <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runScan}>
             <div className="space-y-2">
@@ -254,12 +341,23 @@ export function SwingScannerPage() {
               />
             </div>
             <div className="flex items-end">
-              <Button type="submit" disabled={isRunning}>
+              <Button type="submit" disabled={isRunning || scanBlocked}>
                 <Play className="mr-2 size-4" />
-                {isRunning ? "Running scan…" : "Run scan"}
+                {isRunning
+                  ? "Running scan…"
+                  : scanBlocked
+                    ? "Scan blocked"
+                    : "Run scan"}
               </Button>
             </div>
           </form>
+
+          {scanBlocked ? (
+            <p className="text-sm text-destructive">
+              Scanner readiness is blocked for the current universe. Resolve blockers
+              above before running a scan.
+            </p>
+          ) : null}
 
           {scanError ? <ErrorState message={scanError} /> : null}
           {runMeta ? (
@@ -469,19 +567,14 @@ export function SwingScannerPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium">Data quality</p>
-                  <div className="flex flex-wrap gap-1">
-                    <Badge variant={freshnessVariant(selectedCandidate.dataQuality.freshness)}>
-                      {selectedCandidate.dataQuality.freshness}
-                    </Badge>
-                    <Badge variant="outline">
-                      {selectedCandidate.dataQuality.confidence}
-                    </Badge>
-                    {selectedCandidate.dataQuality.priceSource ? (
-                      <Badge variant="outline">
-                        {selectedCandidate.dataQuality.priceSource}
-                      </Badge>
-                    ) : null}
-                  </div>
+                  <DataQualityBadges
+                    dataQuality={{
+                      freshness: selectedCandidate.dataQuality.freshness,
+                      confidence: selectedCandidate.dataQuality.confidence,
+                      source: selectedCandidate.dataQuality.priceSource ?? undefined,
+                    }}
+                    warnings={selectedCandidate.dataQuality.warnings}
+                  />
                 </div>
                 <Button
                   type="button"

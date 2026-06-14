@@ -366,6 +366,17 @@ type PortfolioRisk = {
   activeSwingCapital: number
   activeSwingTradeCount: number
   maxLossIfActiveStopLossesHit: number
+  activeTrades?: Array<{
+    symbol: string
+    classification: "confirmed" | "inferred" | "unmatched" | "incomplete"
+    maxLossIfStopHit: number | null
+    warnings: string[]
+  }>
+  activeTradeReconciliation?: {
+    confirmedCount: number
+    inferredBrokerPositions: Array<{ symbol: string; quantity: number }>
+    unmatchedJournalEntries: Array<{ id: string; symbol: string }>
+  }
   topHoldingsConcentration: Array<{
     symbol: string
     name: string
@@ -1557,6 +1568,47 @@ function PortfolioRiskCard({
           <MetricCard label="ETF allocation" value={formatMoney(risk.assetAllocation.etf)} />
         </div>
         <WarningsList warnings={risk.warnings} />
+        {risk.activeTrades && risk.activeTrades.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Active trade reconciliation</p>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Badge variant="outline">
+                confirmed: {risk.activeTradeReconciliation?.confirmedCount ?? 0}
+              </Badge>
+              {(risk.activeTradeReconciliation?.inferredBrokerPositions.length ?? 0) >
+              0 ? (
+                <Badge variant="outline">
+                  inferred broker positions:{" "}
+                  {risk.activeTradeReconciliation?.inferredBrokerPositions.length}
+                </Badge>
+              ) : null}
+            </div>
+            <TableScroll>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Symbol</TableHead>
+                    <TableHead>Classification</TableHead>
+                    <TableHead>Max SL loss</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {risk.activeTrades.map((trade) => (
+                    <TableRow key={trade.symbol}>
+                      <TableCell>{trade.symbol}</TableCell>
+                      <TableCell>{trade.classification}</TableCell>
+                      <TableCell>
+                        {trade.maxLossIfStopHit == null
+                          ? "—"
+                          : formatMoney(trade.maxLossIfStopHit)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableScroll>
+          </div>
+        ) : null}
         <div className="grid gap-5 xl:grid-cols-3">
           <ExposureTable
             title="Top Holdings"

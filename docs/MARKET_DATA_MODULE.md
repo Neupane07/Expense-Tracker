@@ -60,7 +60,20 @@ Fields should eventually include:
 
 If symbol/security mapping is uncertain, trade validation must reject the setup.
 
-## Price Data
+`InstrumentVerificationService` classifies mapping as `VERIFIED`, `INFERRED`,
+`UNVERIFIED`, or `MISSING` and exposes readiness blockers for missing mapping.
+
+## Corporate-Action Adjustment Policy
+
+There is no corporate-action ingestion provider in Finance OS today. Stored daily
+candles may include `isAdjusted`, but that flag is not independently verified.
+
+Policy:
+
+- if adjustment cannot be verified, block history-dependent operations such as
+  scanner readiness technical checks and indicator-dependent validation
+- emit `CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED`
+- do not claim a corporate-action provider exists
 
 Every latest price must include:
 

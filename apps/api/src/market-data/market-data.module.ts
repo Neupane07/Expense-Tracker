@@ -4,6 +4,7 @@ import { CandlesService } from './candles.service';
 import { DhanMarketDataProviderService } from './dhan-market-data-provider.service';
 import { IndicatorsService } from './indicators.service';
 import { InstrumentsService } from './instruments.service';
+import { InstrumentVerificationService } from './instrument-verification.service';
 import { MarketDataController } from './market-data.controller';
 import { MarketDataQualityService } from './market-data-quality.service';
 import { MarketDataService } from './market-data.service';
@@ -19,6 +20,7 @@ import { PricesService } from './prices.service';
     CandlesService,
     IndicatorsService,
     MarketDataQualityService,
+    InstrumentVerificationService,
     DhanMarketDataProviderService,
   ],
   exports: [
@@ -27,6 +29,7 @@ import { PricesService } from './prices.service';
     CandlesService,
     IndicatorsService,
     MarketDataQualityService,
+    InstrumentVerificationService,
     DhanMarketDataProviderService,
   ],
 })

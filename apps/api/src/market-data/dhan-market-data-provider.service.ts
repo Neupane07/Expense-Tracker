@@ -120,8 +120,7 @@ export class DhanMarketDataProviderService {
           });
         }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         errors.push(`${segment}: ${message}`);
       }
     }

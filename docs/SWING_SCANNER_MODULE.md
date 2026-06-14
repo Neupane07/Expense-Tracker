@@ -28,12 +28,18 @@ A trade candidate is useful only if it has:
 
 ## Setup Types
 
-Initial setup types:
+Implemented setup types:
 
 ```text
 BREAKOUT
 PULLBACK_TO_SUPPORT
 RSI_REVERSAL
+```
+
+Possible later setup types, after the required research/sector/regime inputs
+exist:
+
+```text
 RESULT_MOMENTUM
 SECTOR_ROTATION
 RELATIVE_STRENGTH
@@ -90,7 +96,31 @@ Suggested scoring weights:
 - Portfolio fit: 10%
 - Liquidity/data quality: 5%
 
+## Readiness Endpoint
+
+`GET /scanner/readiness` is a read-only diagnostic endpoint. It checks:
+
+- Dhan connection/credential presence
+- latest broker sync age
+- portfolio context (holdings/cash snapshots)
+- per-symbol instrument mapping, stored price freshness, stored candles,
+  indicators, and research freshness
+
+Optional query:
+
+- `?symbols=INFY,TCS` for an explicit universe
+- default holdings-derived universe when omitted
+
+The endpoint returns `READY`, `DEGRADED`, or `BLOCKED`, plus per-check warnings
+and blockers. It does not run scans or fetch missing market data.
+
 ## Hard Reject Rules
+
+The current scanner enforces verified mapping, price/candle availability,
+shared risk validation, DELIVERY-only behavior, and confidence caps. The full
+target gate below also requires a corporate-action/restricted-security data
+source that is not implemented yet; until that exists, the scanner must not
+claim those checks passed.
 
 Reject candidate if:
 

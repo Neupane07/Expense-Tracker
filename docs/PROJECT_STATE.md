@@ -1,284 +1,244 @@
-# Project State
+# Finance OS Project State
 
-## Product
+## Snapshot
 
-This repository is being evolved from an Expense Tracker into a broader personal finance platform called Finance OS.
+Repository inspection date: 2026-06-13
 
-The existing Expense Tracker module must continue working while new portfolio, market-data, scanner, risk, trade-journal, research, and MCP capabilities are added.
+Phase 8 current-state hardening is implemented on the working tree described in
+this document.
 
-## Current branch
+## Executive Summary
 
-`feature/finance-os-foundation`
+Finance OS is well beyond a placeholder foundation. The repository contains a
+working Expense Tracker plus implemented portfolio, read-only Dhan sync,
+mutual-fund valuation, market-data, risk, scanner readiness, trade-journal, and
+manual research foundations with browser pages and unit/e2e tests.
 
-Update this if work continues on a new branch.
+It is not yet the full target system. The largest missing architectural piece
+is the internal read-only AI tool layer and tester UI. MCP should not be built
+directly on controllers before that layer exists. Important domain gaps also
+remain in instrument-master coverage, corporate-action ingestion, automated
+research sources, market regime/sector breadth, and broad scanner universe
+expansion.
 
-## Completed phases
+## Implemented
 
-### Phase 0: Finance OS foundation
+### Expense Tracker
 
-Status: Completed
+- invite-only Google authentication and opaque HttpOnly sessions
+- per-user ownership for accounts, imports, transactions, and rules
+- ICICI bank and ICICI Amazon Pay card XLS parsing
+- import preview/confirm, normalization, deduplication, and import statistics
+- protected categorization behavior for refunds, credits, and transfers
+- review queue, manual categorization, reusable rules, and rule application
+- period-filtered dashboard with summary, charts, and 12-month trend
+- responsive desktop/mobile application shell
 
-Completed work:
+### Portfolio and broker
 
-* Finance OS documentation foundation created.
-* Existing expense-specific architecture moved/documented separately.
-* Placeholder backend modules added for:
+- encrypted Dhan credentials with masked API responses
+- explicit read-only Dhan sync for holdings, positions, orders, trades, and funds
+- persisted normalized snapshots plus raw broker payloads
+- same-day sell reconciliation
+- live listed-holding valuation with cached price snapshots and fallback warnings
+- manual mutual-fund holdings and AMFI NAV valuation
+- portfolio snapshot, allocation, P&L, holdings, orders, and mutual-fund UI
 
-  * portfolio
-  * broker
-  * market-data
-  * scanner
-  * risk
-  * trade-journal
-  * research
-* Placeholder frontend routes/pages added for new Finance OS areas.
-* Existing expense tracker behavior intended to remain unchanged.
-* No scanner logic implemented.
-* No MCP server implemented.
-* No order execution implemented.
+### Market data and risk
 
-### Phase 1: Read-only portfolio snapshot foundation
+- instrument records resolved from known broker holdings/orders/trades
+- Dhan latest-price and historical daily-candle reads
+- stored prices, candles, indicators, and quality warnings
+- SMA 20/50/200, RSI 14, ATR 14, volume average/ratio, SMA-50 distance
+- deterministic BUY/DELIVERY validation and position sizing
+- portfolio concentration, allocation, sector/industry-derived exposure warnings
+- explicit rejection of stale/missing prices, bad geometry, low R:R,
+  insufficient cash, non-delivery products, MTF, and F&O
 
-Status: Completed by Codex
+### Scanner, journal, and research
 
-Expected completed work:
+- deterministic `BREAKOUT`, `PULLBACK_TO_SUPPORT`, and `RSI_REVERSAL` detectors
+- scan over current synced holdings or explicit user symbols
+- persisted latest scan results with warnings, rejects, confidence caps, and
+  suggested manual order parameters
+- every setup passes through the shared risk validation service
+- manual and scanner-derived DELIVERY trade-journal plans
+- journal status lifecycle, close/review fields, and server-calculated P&L
+- user-entered dated research items/evidence and deterministic snapshots
+- research freshness/risk flags integrated into scanner confidence
+- functional `/scanner`, `/trade-journal`, and `/research` pages
 
-* Dhan read-only sync foundation added.
-* Portfolio snapshot foundation added.
-* Broker/portfolio models or tables added as required.
-* Holdings, positions, orders, trades, and funds sync support added or scaffolded.
-* Raw broker payload storage added where applicable.
-* Allocation calculation added.
-* Data freshness or warning metadata added.
-* Basic portfolio endpoints added.
-* Tests added for normalization/allocation logic where applicable.
-* Existing expense tracker behavior should remain unchanged.
+## Partial
 
-### Phase 2: Mutual fund support and AMFI NAV valuation
+### Instrument and market-data foundation
 
-Status: Completed by Codex
+- Instrument mapping is derived from the user's broker history. There is no
+  maintained Dhan/NSE/BSE security-master ingestion, inactive-symbol lifecycle,
+  or comprehensive tradable universe.
+- `InstrumentVerificationService` documents mapping status and blocks
+  history-dependent operations when corporate-action adjustment cannot be
+  verified. No corporate-action provider exists yet.
+- Instrument `sector` and `industry` fields exist but no authoritative enrichment
+  pipeline is present.
+- 52-week distance, relative strength, index/sector series, liquidity screens,
+  FII/DII flows, global cues, and market regime are not implemented.
 
-Expected completed work:
+### Portfolio and active-trade risk
 
-* Manual mutual fund holding CRUD added under the portfolio API.
-* AMFI NAV sync support added using `AMFI_NAV_URL`, defaulting to AMFI `NAVAll.txt`.
-* Mutual fund holdings match to AMFI schemes by normalized scheme name.
-* Manual `schemeCode` override is supported and takes precedence over name matching.
-* Mutual fund valuation is included in portfolio snapshots.
-* NAV date and stale NAV warnings are returned in portfolio snapshot data-quality warnings.
-* Tests added for AMFI NAV matching, valuation math, stale NAV warnings, and allocation math.
-* Existing expense tracker behavior should remain unchanged.
-* Scanner, MCP, and order execution remain unimplemented.
+- Portfolio risk now reconciles journal `ACTIVE` entries with broker positions
+  into `confirmed`, `inferred`, `unmatched`, and `incomplete` classifications.
+- `maxLossIfActiveStopLossesHit` is calculated from confirmed active journal
+  plans with valid stop-loss geometry; broker-only positions are not treated as
+  confirmed swing trades.
+- `GET /risk/portfolio` returns `activeTrades` and
+  `activeTradeReconciliation` metadata in addition to existing summary fields.
+- Risk defaults remain environment-configurable, not user-owned database
+  settings.
 
-### Phase 3: Market data foundation and secure Dhan credentials
+### Scanner
 
-Status: Completed by Codex
+- `GET /scanner/readiness` reports deterministic `READY`/`DEGRADED`/`BLOCKED`
+  status from stored credentials, broker sync age, portfolio context, and
+  per-symbol mapping/price/candle/indicator/research checks.
+- Readiness supports optional `?symbols=INFY,TCS` or defaults to holdings.
+- Readiness does not run scans or fetch missing provider data.
+- The default scan universe remains already-owned stocks/ETFs.
+- Only three setup types exist.
+- Research contributes freshness caps and flags, but verified fundamental,
+  official filing, news, sector, or market-regime scoring is still missing.
 
-Expected completed work:
+### Research
 
-* Dhan broker credentials are stored in DB encrypted at rest with AES-256-GCM.
-* `FINANCE_OS_CREDENTIAL_KEY` is required for broker credential operations in non-test environments.
-* Dhan API key, API secret, client ID, and access token are never returned to the frontend.
-* Settings -> Broker Connections -> Dhan UI added for save, validate, and remove actions.
-* Existing Dhan portfolio sync now uses saved encrypted credentials rather than `DHAN_CLIENT_ID` or `DHAN_ACCESS_TOKEN`.
-* Instrument, price snapshot, daily candle, indicator snapshot, and data-quality warning tables added.
-* Market-data services and endpoints added for instruments, latest prices, candles, and technical indicators.
-* Dhan market-data provider added for read-only quote and historical candle data.
-* Tests added for encryption, redaction, missing key failure, indicator calculations, stale prices, and missing candles.
-* Existing expense tracker behavior should remain unchanged.
-* Scanner, MCP, and order placement remain unimplemented.
+- Manual/user-URL evidence and deterministic snapshots are implemented.
+- Official filing and news providers are explicit stubs and automated source
+  types are rejected.
+- There is no scheduled refresh, source deduplication policy, provider trust
+  ranking, or evidence review workflow.
 
-### Phase 4: Deterministic risk engine
+### Testing and operations
 
-Status: Completed by Codex
+- Backend unit coverage is substantial for core calculations and ownership.
+- Authenticated Finance OS e2e tests cover session boundaries, broker credential
+  redaction, user-scoped journal access, and scanner readiness.
+- Focused web tests cover research-only disclaimers and warning/reject/readiness
+  rendering via Vitest + Testing Library.
+- No background worker/scheduler exists for broker, NAV, market, or research
+  refresh. Current synchronization is request-driven.
 
-Expected completed work:
+## Missing
 
-* Configurable safe-default risk settings added.
-* Position sizing service added for cash, capital-limit, and risk-limit based quantity calculation.
-* Trade validation service added for user-provided BUY/DELIVERY trade setups only.
-* Portfolio risk endpoint added with portfolio value, cash, active swing capital approximation, concentration, allocation, sector/theme exposure, and warnings.
-* Trade validation rejects unknown symbols, stale/missing market data, invalid entry/target/stop loss, low risk/reward, invalid quantity, insufficient cash, non-DELIVERY products, MTF, and F&O.
-* Trade validation warns for existing holdings, increased concentration, high single-stock concentration, and fallback/unofficial data sources.
-* Tests added for deterministic risk calculations and rejection/warning paths.
-* Existing expense tracker behavior should remain unchanged.
-* Scanner, MCP, order placement, auto trading, MTF, and F&O remain unimplemented.
+- internal read-only tool registry and versioned tool contracts
+- standard AI/tool response envelope
+- tool execution audit model/service
+- Tool Tester UI
+- read-only MCP server/adapter
+- stock deep-dive aggregation contract
+- canonical manual Super Order plan service independent of scanner presentation
+- instrument-master and corporate-action ingestion pipelines
+- official/licensed filing and news ingestion
+- market regime, index/sector strength, and broad scanner universe
 
-### Phase 5: Swing scanner foundation
+There are no broker order placement, modification, or cancellation endpoints.
+That absence is intentional and must remain.
 
-Status: Completed by Codex
-
-Expected completed work:
-
-* Deterministic swing scan pipeline added using verified instruments, prices, candles, indicators, and portfolio/risk inputs.
-* Initial setup types implemented: `BREAKOUT`, `PULLBACK_TO_SUPPORT`, `RSI_REVERSAL`.
-* Hard rejects and confidence caps applied per `docs/SWING_SCANNER_MODULE.md` and `docs/RISK_RULES.md`.
-* Each candidate includes entry/target/stop loss, risk/reward, suggested quantity, capital required, warnings, reject reasons, and data-quality metadata.
-* Scanner endpoints added: `POST /scanner/swing/run` and `GET /scanner/swing/candidates`.
-* Each candidate is validated through shared `POST /risk/validate-trade` logic (no duplicated risk math).
-* Instrument lookup extended to holdings, orders, and trades mappings; uncertain symbols are rejected without guessing `securityId`.
-* Read-only Swing Scanner UI added at `/scanner` with run action, results table, and candidate detail panel.
-* Tests added for reject paths, confidence caps, stale/missing data, low risk/reward, portfolio-fit warnings, and no order placement behavior.
-* Existing expense tracker behavior remains unchanged.
-* MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
-
-### Phase 7: Research evidence engine
-
-Status: Completed by Codex
-
-Expected completed work:
-
-* `ResearchItem`, `ResearchEvidence`, and `ResearchSnapshot` Prisma models and migration added.
-* Research services: items, snapshot, ingestion, and quality under `apps/api/src/research/`.
-* Provider abstractions: manual (active), official filings and news (stubs/TODO).
-* API endpoints: `GET/POST /research/items`, `DELETE /research/items/:id`, `GET /research/:symbol`, `POST /research/:symbol/snapshot`.
-* Deterministic snapshot generation from stored items only (no AI summarization).
-* Stale/missing evidence warnings and configurable freshness threshold.
-* Swing scanner candidates include research freshness, warnings, evidence count, and risk flags.
-* Confidence caps: `NO_FRESH_NEWS_OR_FILING_CHECK`, `STALE_RESEARCH_EVIDENCE`.
-* `/research` UI replaces placeholder with symbol lookup, snapshot, items table, and manual add form.
-* Scanner candidate detail links to research for the symbol.
-* Tests for CRUD, snapshot, stale/missing warnings, scanner caps, and ownership checks.
-* Existing expense tracker behavior remains unchanged.
-* MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
-
-### Phase 6: Trade journal foundation
-
-Status: Completed by Codex
-
-Expected completed work:
-
-* `TradeJournalEntry` Prisma model and migration added (user-scoped, DELIVERY-only v1).
-* CRUD API under `/trade-journal/entries` with list filters, plan updates, close/review fields, and delete rules for planned/cancelled entries.
-* `POST /trade-journal/entries/from-scanner-candidate` creates a planned entry from an explicit scanner save action with risk validation snapshot.
-* Symbol verification via instruments service; risk validation via shared trade validation service (no duplicated risk math).
-* Trade Journal UI at `/trade-journal` with list, manual plan form, close/review form, and scanner **Save to journal** action.
-* Tests for CRUD paths, DELIVERY enforcement, invalid symbol rejection, close validation, and no broker order placement.
-* Existing expense tracker behavior remains unchanged.
-* MCP, order placement, auto trading, MTF/leverage, and F&O remain unimplemented.
-
-### Phase 4.5: Finance OS portfolio, market-data, and risk UI
-
-Status: Completed by Codex
-
-Expected completed work:
-
-* Portfolio placeholder page replaced with a functional read-only Finance OS UI.
-* Portfolio Holdings tab shows snapshot, allocation, cash, warnings, data freshness, synced holdings, and synced orders.
-* Read-only Dhan sync action added via `POST /portfolio/sync/dhan`; broker secrets remain API-only and are not displayed.
-* Mutual Funds tab lists manual holdings, supports add/edit/delete through existing portfolio APIs, triggers AMFI NAV sync, and shows NAV date, value, cost, P&L, and warnings.
-* Market Data tab looks up instruments, latest prices, candles, and indicators through existing market-data APIs and can trigger indicator recalculation.
-* Risk tab validates user-entered BUY/DELIVERY setups, calculates position size, and shows portfolio risk from backend risk APIs.
-* Scanner remains a placeholder and explicitly states scanner logic is not implemented yet.
-* No scanner logic, MCP, order placement, auto trading, MTF/leverage, or F&O behavior was added.
-* Existing expense tracker routes remain unchanged.
-
-## Existing app status
-
-The Expense module is the first completed module and must remain stable.
-
-Existing functionality that must not break:
-
-* Google session authentication
-* statement upload
-* XLS import
-* statement parsing
-* transaction normalization
-* deduplication
-* categorization rules
-* transactions dashboard
-* expense dashboard
-* admin/invite/session behavior
-
-Before merging any phase, verify:
+## Current Backend Modules
 
 ```text
-Can login
-Can upload statement
-Can parse statement
-Can view transactions
-Can create/update rules
-Can view dashboard
-Can access new placeholder Finance OS pages
+auth                  accounts
+imports               transactions
+rules                 dashboard
+portfolio             broker/dhan
+market-data           risk
+scanner               trade-journal
+research              prisma
+health
 ```
 
-## Current priority
+All financial controllers use the session guard. `ConfigModule` is global and
+Prisma uses the generated client plus PostgreSQL adapter configuration required
+by this repository.
 
-Move from research evidence foundation to the next safe foundation phase.
-
-Next phase:
+## Current Frontend Routes
 
 ```text
-MCP read-only tools
+/sign-in
+/dashboard
+/imports
+/transactions
+/review
+/rules
+/portfolio
+/scanner
+/trade-journal
+/research
+/settings/broker-connections/dhan
+/admin/invitations
 ```
 
-Next phase goal:
+No Tool Tester route exists.
 
-* Expose read-only portfolio/scanner/risk/research tools for AI access.
-* Keep expense, portfolio, scanner, journal, and research behavior stable.
-* Do not implement order execution.
+## Current Database Areas
 
-## Hard boundaries
+- identity: `User`, `Invitation`, `Session`
+- expenses: `Account`, `Import`, `Transaction`, `TransactionCategory`, `Rule`
+- broker: account/connection/credential and holding/position/order/trade/fund snapshots
+- portfolio: mutual-fund holdings/NAV and portfolio snapshots
+- market data: instrument, price, daily candle, indicator, data-quality warning
+- scanner: `SwingScanRun`
+- journal: `TradeJournalEntry`
+- research: `ResearchItem`, `ResearchEvidence`, `ResearchSnapshot`
 
-These rules apply to all upcoming phases:
+No tool-definition, tool-audit, corporate-action, index/sector-series, or
+user-risk-settings model exists.
 
-```text
-Do not break existing expense tracker behavior.
-Do not implement auto trading.
-Do not place orders.
-Do not modify orders.
-Do not cancel orders.
-Do not recommend or use MTF/leverage.
-Do not implement F&O.
-Do not implement scanner before market-data and risk foundations are stable.
-Do not expose broker secrets to frontend.
-Do not store broker tokens in localStorage.
-Do not mix expense transaction logic with portfolio/trading logic.
-```
+## Current API Surface
 
-## Trading and investment boundary
+Implemented authenticated route groups:
 
-Finance OS v1 is research-only.
+- `/accounts`, `/imports`, `/transactions`, `/rules`, `/dashboard`
+- `/broker/dhan/*`
+- `/portfolio/*`
+- `/market-data/*`
+- `/risk/*`
+- `/scanner/swing/*`
+- `/scanner/readiness`
+- `/trade-journal/entries/*`
+- `/research/*`
 
-Allowed:
+Public routes are limited to health and required authentication entry/session
+flow. No MCP or generic tool execution endpoint exists.
 
-* portfolio snapshot
-* holdings sync
-* mutual fund valuation
-* active trade visibility
-* market-data analysis
-* scanner suggestions
-* risk/reward validation
-* suggested Dhan Super Order parameters
-* trade journal
+## Test Inventory
 
-Not allowed in v1:
+Backend tests cover:
 
-* auto-buy
-* auto-sell
-* auto-modify stop loss
-* unattended trading
-* MTF/leverage execution
-* F&O execution
+- auth/session/admin boundaries and user ownership
+- ICICI parsers, import validation, protected categorization, and rules
+- Dhan normalization, credential encryption/redaction, and holding reconciliation
+- mutual-fund matching/valuation and listed-holding valuation
+- market-data quality and indicator calculations
+- position sizing and trade validation
+- scanner detection, risk integration, confidence caps, and no-order behavior
+- trade-journal lifecycle and research evidence/snapshot behavior
 
-The user manually verifies and places all orders in Dhan.
+Remaining high-value gaps:
 
-## Data-quality principles
+- broader authenticated API e2e coverage across portfolio/market-data/research
+- controller/DTO validation contracts
+- tool contract tests once the internal layer exists
+- deployment/security tests for MCP only after it exists
 
-Every financial output should include data-quality metadata where possible.
+## Immediate Recommendation
 
-Required concepts:
+Execute Phase 9 in `docs/ROADMAP.md`: build the internal read-only tool registry
+and Tool Tester on top of the Phase 8 readiness and data-quality contracts.
 
-```text
-source
-asOf
-lastSyncedAt
-freshness
-warnings
-confidenceCapReason
-rawPayload where useful for debugging
-```
+## Non-Negotiable Boundaries
 
-If data is stale, missing, unofficial, or partially synced, the UI/API must show a warning.
-
-If symbol/security mapping is uncertain, trade validation/scanner must reject the setup later
+- research and decision support only
+- manual order verification and placement
+- no automated broker writes
+- no MTF/leverage or F&O
+- no guessed symbols, prices, evidence, or corporate-action status
+- no broker secrets in frontend, logs, tool output, or MCP output
+- no regression to Expense Tracker behavior

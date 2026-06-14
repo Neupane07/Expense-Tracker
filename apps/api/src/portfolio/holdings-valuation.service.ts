@@ -104,9 +104,7 @@ export class HoldingsValuationService {
     }
 
     const valuableHoldings = holdings.filter(
-      (
-        holding,
-      ): holding is T & { securityId: string; exchange: string } =>
+      (holding): holding is T & { securityId: string; exchange: string } =>
         Boolean(holding.securityId) && Boolean(holding.exchange),
     );
 
@@ -120,7 +118,8 @@ export class HoldingsValuationService {
     );
 
     const priceByKey = new Map<string, PriceMeta>();
-    const stalePending: Array<T & { securityId: string; exchange: string }> = [];
+    const stalePending: Array<T & { securityId: string; exchange: string }> =
+      [];
 
     for (const holding of valuableHoldings) {
       const key = this.holdingKey(holding);
@@ -152,8 +151,7 @@ export class HoldingsValuationService {
           })),
         );
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(
           `Bulk Dhan quote fetch failed for ${stalePending.length} holdings: ${message}`,
         );
@@ -166,10 +164,7 @@ export class HoldingsValuationService {
         fetchWarnings.push(
           'Dhan returned no quotes for the requested securities. Verify market-data API access on your Dhan account.',
         );
-      } else if (
-        bulkPrices.size > 0 &&
-        bulkPrices.size < stalePending.length
-      ) {
+      } else if (bulkPrices.size > 0 && bulkPrices.size < stalePending.length) {
         const missing = stalePending.length - bulkPrices.size;
         fetchWarnings.push(
           `${missing} holding(s) had no live quote in the Dhan response.`,
@@ -183,7 +178,10 @@ export class HoldingsValuationService {
 
     for (const holding of stalePending) {
       const key = this.holdingKey(holding);
-      const bulkKey = this.provider.bulkKey(holding.exchange, holding.securityId);
+      const bulkKey = this.provider.bulkKey(
+        holding.exchange,
+        holding.securityId,
+      );
       const fresh = bulkPrices.get(bulkKey);
 
       if (fresh) {
@@ -212,10 +210,7 @@ export class HoldingsValuationService {
     );
     const summary = this.summarize(valued);
     const priceAsOf = latestTimestamp(priceByKey);
-    const warnings = [
-      ...fetchWarnings,
-      ...this.dataQualityWarnings(summary),
-    ];
+    const warnings = [...fetchWarnings, ...this.dataQualityWarnings(summary)];
 
     return { holdings: valued, priceAsOf, warnings, summary };
   }
@@ -231,9 +226,10 @@ export class HoldingsValuationService {
       warnings.push('SECURITY_ID_MISSING');
     }
 
-    const price = holding.securityId && holding.exchange
-      ? priceByKey.get(this.holdingKey(holding as ValuationInputHolding & { securityId: string; exchange: string }))
-      : undefined;
+    const price =
+      holding.securityId && holding.exchange
+        ? priceByKey.get(this.holdingKey(holding))
+        : undefined;
 
     if (!price) {
       const fallbackWarning = holding.securityId
@@ -262,9 +258,7 @@ export class HoldingsValuationService {
     const currentValue = roundMoney(holding.totalQty * price.ltp);
     const pnl = roundMoney(currentValue - investedValue);
     const pnlPercent =
-      investedValue > 0
-        ? roundPercent((pnl / investedValue) * 100)
-        : null;
+      investedValue > 0 ? roundPercent((pnl / investedValue) * 100) : null;
 
     let dayPnl: number | null = null;
     let dayPnlPercent: number | null = null;
@@ -272,9 +266,7 @@ export class HoldingsValuationService {
       const previousValue = roundMoney(holding.totalQty * price.previousClose);
       dayPnl = roundMoney(currentValue - previousValue);
       dayPnlPercent =
-        previousValue > 0
-          ? roundPercent((dayPnl / previousValue) * 100)
-          : null;
+        previousValue > 0 ? roundPercent((dayPnl / previousValue) * 100) : null;
     }
 
     if (price.freshness === 'STALE' || price.freshness === 'MISSING') {
@@ -370,7 +362,9 @@ export class HoldingsValuationService {
   }
 
   private async ensureInstruments(
-    holdings: Array<ValuationInputHolding & { securityId: string; exchange: string }>,
+    holdings: Array<
+      ValuationInputHolding & { securityId: string; exchange: string }
+    >,
   ) {
     const seen = new Map<
       string,
@@ -504,9 +498,7 @@ export class HoldingsValuationService {
             low: price.low,
             previousClose: price.previousClose,
             volume:
-              price.volume == null
-                ? null
-                : BigInt(Math.trunc(price.volume)),
+              price.volume == null ? null : BigInt(Math.trunc(price.volume)),
             source: price.source,
             timestamp: price.timestamp,
             freshness: 'LIVE',

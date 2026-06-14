@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PortfolioAssetClass } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ActiveTradeService,
+  type ActiveTradeReconciliation,
+  type ReconciledActiveTrade,
+} from './active-trade.service';
 
 type DecimalLike = {
   toNumber(): number;
@@ -23,6 +28,11 @@ export type PortfolioRiskSnapshot = {
   activeSwingCapital: number;
   activeSwingTradeCount: number;
   maxLossIfActiveStopLossesHit: number;
+  activeTrades: ReconciledActiveTrade[];
+  activeTradeReconciliation: Pick<
+    ActiveTradeReconciliation,
+    'confirmedCount' | 'inferredBrokerPositions' | 'unmatchedJournalEntries'
+  >;
   topHoldingsConcentration: HoldingExposure[];
   assetAllocation: {
     stock: number;
@@ -49,14 +59,17 @@ export type TradeExposure = {
 
 @Injectable()
 export class ExposureService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activeTrades: ActiveTradeService,
+  ) {}
 
   async getPortfolioRisk(userId: string): Promise<PortfolioRiskSnapshot> {
-    const [holdings, fund, latestSnapshot, positions] = await Promise.all([
+    const [holdings, fund, latestSnapshot, reconciliation] = await Promise.all([
       this.findLatestHoldings(userId),
       this.findLatestFund(userId),
       this.findLatestPortfolioSnapshot(userId),
-      this.findLatestPositions(userId),
+      this.activeTrades.reconcile(userId),
     ]);
     const instruments = await this.findInstrumentsForHoldings(holdings);
     const cash = roundMoney(this.decimalToNumber(fund?.availableBalance));
@@ -81,32 +94,26 @@ export class ExposureService {
         weightPct: percent(marketValue, totalPortfolioValue),
       };
     });
-    const activePositions = positions.filter(
-      (position) => this.decimalToNumber(position.netQty) !== 0,
-    );
-    const activeSwingCapital = roundMoney(
-      activePositions.reduce(
-        (total, position) =>
-          total +
-          Math.abs(this.decimalToNumber(position.netQty)) *
-            this.decimalToNumber(position.costPrice),
-        0,
-      ),
-    );
     const warnings = this.buildPortfolioWarnings({
       holdingsCount: holdings.length,
       hasFund: Boolean(fund),
       hasMutualFundSnapshot: Boolean(latestSnapshot),
       enrichedHoldings,
-      activePositionsCount: activePositions.length,
+      reconciliation,
     });
 
     return {
       totalPortfolioValue,
       cash,
-      activeSwingCapital,
-      activeSwingTradeCount: activePositions.length,
-      maxLossIfActiveStopLossesHit: 0,
+      activeSwingCapital: reconciliation.activeSwingCapital,
+      activeSwingTradeCount: reconciliation.activeSwingTradeCount,
+      maxLossIfActiveStopLossesHit: reconciliation.maxLossIfActiveStopLossesHit,
+      activeTrades: reconciliation.trades,
+      activeTradeReconciliation: {
+        confirmedCount: reconciliation.confirmedCount,
+        inferredBrokerPositions: reconciliation.inferredBrokerPositions,
+        unmatchedJournalEntries: reconciliation.unmatchedJournalEntries,
+      },
       topHoldingsConcentration: enrichedHoldings
         .sort((a, b) => b.marketValue - a.marketValue)
         .slice(0, 5),
@@ -199,22 +206,6 @@ export class ExposureService {
     });
   }
 
-  private async findLatestPositions(userId: string) {
-    const latest = await this.prisma.brokerPositionSnapshot.aggregate({
-      where: { userId },
-      _max: { asOf: true },
-    });
-
-    if (!latest._max.asOf) {
-      return [];
-    }
-
-    return this.prisma.brokerPositionSnapshot.findMany({
-      where: { userId, asOf: latest._max.asOf },
-      orderBy: { tradingSymbol: 'asc' },
-    });
-  }
-
   private async findInstrumentsForHoldings(
     holdings: Array<{ tradingSymbol: string }>,
   ) {
@@ -258,11 +249,9 @@ export class ExposureService {
     hasFund: boolean;
     hasMutualFundSnapshot: boolean;
     enrichedHoldings: HoldingExposure[];
-    activePositionsCount: number;
+    reconciliation: ActiveTradeReconciliation;
   }) {
-    const warnings: string[] = [
-      'ACTIVE_SWING_RISK_REQUIRES_MANUAL_STOP_LOSSES',
-    ];
+    const warnings: string[] = [...input.reconciliation.warnings];
 
     if (input.holdingsCount === 0) {
       warnings.push('NO_SYNCED_HOLDINGS');
@@ -280,11 +269,11 @@ export class ExposureService {
       warnings.push('SECTOR_EXPOSURE_PARTIALLY_UNMAPPED');
     }
 
-    if (input.activePositionsCount > 0) {
-      warnings.push('ACTIVE_SWING_CAPITAL_INFERRED_FROM_BROKER_POSITIONS');
+    if (input.reconciliation.activeSwingTradeCount === 0) {
+      warnings.push('NO_ACTIVE_JOURNAL_SWING_TRADES');
     }
 
-    return warnings;
+    return [...new Set(warnings)];
   }
 
   private decimalToNumber(value: DecimalLike | number | null | undefined) {

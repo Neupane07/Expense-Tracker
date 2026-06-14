@@ -177,6 +177,16 @@ curl -i \
   http://localhost:4000/risk/portfolio
 ```
 
+Portfolio risk checks should show:
+
+- `activeTrades` with `confirmed`, `inferred`, `unmatched`, or `incomplete`
+  classifications
+- `activeTradeReconciliation` with inferred broker positions and unmatched journal
+  entries
+- `maxLossIfActiveStopLossesHit` calculated only from confirmed active journal
+  plans with valid stop-loss geometry
+- broker-only positions surfaced as warnings, not counted as confirmed swings
+
 Risk checks should show:
 
 - deterministic `warnings` and `rejectReasons`
@@ -202,12 +212,37 @@ With the API and web app running, verify:
   values when present.
 - Risk validation and position sizing render backend results without generating
   scanner candidates or placing orders.
-- `/scanner` runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, shows research-only disclaimer text, and can save a candidate to the journal.
+- `/scanner` loads `GET /scanner/readiness`, runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, shows research-only disclaimer text, and can save a candidate to the journal.
 - `/trade-journal` lists entries, creates manual plans, closes trades with review fields, and shows the manual-execution disclaimer.
 - `/research` loads symbol evidence, shows snapshot/warnings/data quality, adds manual items, and regenerates snapshots.
 - `/scanner` candidate detail shows research status and links to `/research?symbol=...`.
 
 ## Scanner tests
+
+Check scanner readiness before running a scan:
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  http://localhost:4000/scanner/readiness
+```
+
+Check readiness for explicit symbols:
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  "http://localhost:4000/scanner/readiness?symbols=INFY,TCS"
+```
+
+Readiness checks should show:
+
+- overall `status` of `READY`, `DEGRADED`, or `BLOCKED`
+- per-check `warnings` and `blockers`
+- `researchDisclaimer` stating readiness does not run scans
+- no provider fetch side effects when stored data is missing
+- `CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED` when candle adjustment cannot be
+  verified
 
 Run a swing scan on synced holdings (default universe):
 
