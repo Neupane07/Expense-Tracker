@@ -159,7 +159,30 @@ export function SwingScannerPage() {
     "/scanner/swing/candidates",
   )
   const readinessQuery = useApiQuery<ScannerReadinessResponse>(readinessPath)
-  const scanBlocked = readinessQuery.data?.status === "BLOCKED"
+
+  const explicitSymbols = useMemo(
+    () =>
+      symbolInput
+        .split(/[,\s]+/)
+        .map((value) => value.trim().toUpperCase())
+        .filter(Boolean),
+    [symbolInput],
+  )
+
+  const readinessAppliesToSubmitUniverse = useMemo(() => {
+    if (explicitSymbols.length > 0) {
+      return (
+        readinessSymbols.length > 0 &&
+        readinessSymbols.join(",") === explicitSymbols.join(",")
+      )
+    }
+
+    return readinessSymbols.length === 0
+  }, [explicitSymbols, readinessSymbols])
+
+  const scanBlocked =
+    readinessAppliesToSubmitUniverse &&
+    readinessQuery.data?.status === "BLOCKED"
 
   const candidates = useMemo(
     () => lastRun?.candidates ?? candidatesQuery.data?.candidates ?? [],

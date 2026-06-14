@@ -300,9 +300,21 @@ describe('ResearchIngestionService', () => {
       { createItem: jest.fn() } as never,
       { regenerateSnapshot: jest.fn() } as never,
       { findBySymbol: jest.fn() } as never,
-      { providerId: 'manual', canHandle: () => false, prepareItem: jest.fn() } as never,
-      { providerId: 'official', canHandle: () => true, prepareItem: jest.fn() } as never,
-      { providerId: 'news', canHandle: () => false, prepareItem: jest.fn() } as never,
+      {
+        providerId: 'manual',
+        canHandle: () => false,
+        prepareItem: jest.fn(),
+      } as never,
+      {
+        providerId: 'official',
+        canHandle: () => true,
+        prepareItem: jest.fn(),
+      } as never,
+      {
+        providerId: 'news',
+        canHandle: () => false,
+        prepareItem: jest.fn(),
+      } as never,
     );
 
     await expect(

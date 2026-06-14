@@ -40,31 +40,26 @@ describe('InstrumentVerificationService', () => {
     expect(result.blockers).toContain('INSTRUMENT_MAPPING_MISSING');
   });
 
-  it('blocks historical analysis when stored candles are not adjusted', () => {
-    const result = service.evaluateCorporateActionPolicy({
+  it('blocks historical analysis when adjustment is not independently verified', () => {
+    const unadjusted = service.evaluateCorporateActionPolicy({
       candleCount: 120,
       unadjustedCount: 120,
       providerClaimsAdjusted: false,
     });
-
-    expect(result.adjustmentStatus).toBe('UNVERIFIED');
-    expect(result.providerAvailable).toBe(false);
-    expect(result.blocksHistoricalAnalysis).toBe(true);
-    expect(result.blockers).toContain('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
-  });
-
-  it('allows stored adjusted candles with a provider-unavailable warning', () => {
-    const result = service.evaluateCorporateActionPolicy({
+    const storedAdjustedFlagOnly = service.evaluateCorporateActionPolicy({
       candleCount: 120,
       unadjustedCount: 0,
       providerClaimsAdjusted: false,
     });
 
-    expect(result.blocksHistoricalAnalysis).toBe(false);
-    expect(result.status).toBe('DEGRADED');
-    expect(result.warnings).toContain(
-      'CORPORATE_ACTION_PROVIDER_NOT_AVAILABLE',
-    );
+    for (const result of [unadjusted, storedAdjustedFlagOnly]) {
+      expect(result.adjustmentStatus).toBe('UNVERIFIED');
+      expect(result.providerAvailable).toBe(false);
+      expect(result.blocksHistoricalAnalysis).toBe(true);
+      expect(result.blockers).toContain(
+        'CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED',
+      );
+    }
   });
 
   it('does not pretend a corporate-action provider exists', () => {

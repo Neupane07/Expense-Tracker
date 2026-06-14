@@ -27,15 +27,20 @@ class FakePrismaInstrument {
   rows: StoredInstrument[] = [];
   private nextId = 1;
 
-  async findMany(args: { where: { OR: Array<{ symbol: string; exchange: string }> } }) {
-    return this.rows.filter((row) =>
-      args.where.OR.some(
-        (clause) => clause.symbol === row.symbol && clause.exchange === row.exchange,
+  findMany(args: {
+    where: { OR: Array<{ symbol: string; exchange: string }> };
+  }) {
+    return Promise.resolve(
+      this.rows.filter((row) =>
+        args.where.OR.some(
+          (clause) =>
+            clause.symbol === row.symbol && clause.exchange === row.exchange,
+        ),
       ),
     );
   }
 
-  async upsert(args: {
+  upsert(args: {
     where: { symbol_exchange: { symbol: string; exchange: string } };
     create: Omit<StoredInstrument, 'id'>;
     update: Partial<StoredInstrument>;
@@ -48,7 +53,7 @@ class FakePrismaInstrument {
 
     if (existing) {
       Object.assign(existing, args.update);
-      return existing;
+      return Promise.resolve(existing);
     }
 
     const created: StoredInstrument = {
@@ -58,7 +63,7 @@ class FakePrismaInstrument {
     };
     this.rows.push(created);
 
-    return created;
+    return Promise.resolve(created);
   }
 }
 
@@ -67,17 +72,19 @@ class FakePrismaPriceSnapshot {
   createCalls: Array<unknown> = [];
   private nextId = 1;
 
-  async findMany(args: {
+  findMany(args: {
     where: { instrumentId: { in: string[] } };
     orderBy: unknown;
   }) {
     const ids = new Set(args.where.instrumentId.in);
-    return this.rows
-      .filter((row) => ids.has(row.instrumentId))
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return Promise.resolve(
+      this.rows
+        .filter((row) => ids.has(row.instrumentId))
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()),
+    );
   }
 
-  async create(args: {
+  create(args: {
     data: {
       instrumentId: string;
       ltp: number;
@@ -99,7 +106,7 @@ class FakePrismaPriceSnapshot {
       timestamp: args.data.timestamp,
     };
     this.rows.push(created);
-    return created;
+    return Promise.resolve(created);
   }
 }
 
@@ -115,7 +122,10 @@ function createService(options: {
   const price = new FakePrismaPriceSnapshot();
   price.rows = options.storedPrices ?? [];
 
-  const prisma = { instrument, priceSnapshot: price } as unknown as ConstructorParameters<typeof HoldingsValuationService>[0];
+  const prisma = {
+    instrument,
+    priceSnapshot: price,
+  } as unknown as ConstructorParameters<typeof HoldingsValuationService>[0];
 
   const provider = {
     bulkKey(exchange: string, securityId: string) {
@@ -124,11 +134,13 @@ function createService(options: {
         : 'NSE_EQ';
       return `${segment}:${securityId}`;
     },
-    async fetchLatestPricesBulk() {
+    fetchLatestPricesBulk() {
       if (options.bulkFailure) {
-        throw options.bulkFailure;
+        return Promise.reject(options.bulkFailure);
       }
-      return options.bulkPrices ?? new Map<string, BulkProviderPrice>();
+      return Promise.resolve(
+        options.bulkPrices ?? new Map<string, BulkProviderPrice>(),
+      );
     },
   } as unknown as ConstructorParameters<typeof HoldingsValuationService>[1];
 

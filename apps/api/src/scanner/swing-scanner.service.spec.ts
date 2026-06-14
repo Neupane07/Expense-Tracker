@@ -1,5 +1,4 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
 import { SwingScannerService } from './swing-scanner.service';
 import { DEFAULT_RISK_SETTINGS } from '../risk/risk-settings.service';
 
@@ -53,6 +52,12 @@ describe('SwingScannerService', () => {
     validation?: unknown;
     researchStatus?: unknown;
     readiness?: unknown;
+    corporateActionPolicy?: () => {
+      blocksHistoricalAnalysis: boolean;
+      blockers: string[];
+      warnings: string[];
+      status: string;
+    };
   }) {
     const prisma = {
       brokerHoldingSnapshot: {
@@ -194,7 +199,19 @@ describe('SwingScannerService', () => {
         },
       ),
     };
-    const instrumentVerification = new InstrumentVerificationService();
+    const instrumentVerification = {
+      evaluateCorporateActionPolicy: jest.fn(
+        overrides?.corporateActionPolicy ??
+          (() => ({
+            blocksHistoricalAnalysis: false,
+            blockers: [],
+            warnings: [],
+            status: 'READY',
+            adjustmentStatus: 'VERIFIED',
+            providerAvailable: false,
+          })),
+      ),
+    };
 
     return {
       service: new SwingScannerService(
@@ -208,7 +225,7 @@ describe('SwingScannerService', () => {
         riskSettings as never,
         researchSnapshots as never,
         readiness as never,
-        instrumentVerification,
+        instrumentVerification as never,
       ),
       prisma,
       tradeValidation,
@@ -270,6 +287,14 @@ describe('SwingScannerService', () => {
         source: 'DHAN',
         warnings: [],
       },
+      corporateActionPolicy: () => ({
+        blocksHistoricalAnalysis: true,
+        blockers: ['CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED'],
+        warnings: ['CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED'],
+        status: 'BLOCKED',
+        adjustmentStatus: 'UNVERIFIED',
+        providerAvailable: false,
+      }),
     });
 
     const result = await service.runScan('user-1', { symbols: ['INFY'] });

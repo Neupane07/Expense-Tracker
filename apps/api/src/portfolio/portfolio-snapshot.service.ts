@@ -113,7 +113,10 @@ export class PortfolioSnapshotService {
 
   private buildSummary(input: {
     listed: import('./holdings-valuation.service').HoldingsValuationSummary;
-    mutualFunds: { totalValue: number; holdings: Array<{ costValue: number | null; pnl: number | null }> };
+    mutualFunds: {
+      totalValue: number;
+      holdings: Array<{ costValue: number | null; pnl: number | null }>;
+    };
     cashValue: number;
   }) {
     const listed = input.listed;
@@ -165,9 +168,7 @@ export class PortfolioSnapshotService {
         currentValue: roundMoney(mfCurrentValue),
         pnl: roundMoney(mfPnlSum),
         pnlPercent:
-          mfInvested > 0
-            ? roundPercent((mfPnlSum / mfInvested) * 100)
-            : null,
+          mfInvested > 0 ? roundPercent((mfPnlSum / mfInvested) * 100) : null,
         holdingCount: input.mutualFunds.holdings.length,
       },
       cash,

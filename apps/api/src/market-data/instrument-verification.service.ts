@@ -113,29 +113,16 @@ export class InstrumentVerificationService {
       };
     }
 
-    if (input.unadjustedCount > 0) {
-      warnings.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
-      blockers.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
-
-      return {
-        adjustmentStatus: 'UNVERIFIED',
-        providerAvailable: false,
-        blocksHistoricalAnalysis: true,
-        status: 'BLOCKED',
-        warnings,
-        blockers,
-      };
-    }
-
-    warnings.push('CORPORATE_ACTION_PROVIDER_NOT_AVAILABLE');
+    warnings.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
+    blockers.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
 
     return {
       adjustmentStatus: 'UNVERIFIED',
       providerAvailable: false,
-      blocksHistoricalAnalysis: false,
-      status: 'DEGRADED',
+      blocksHistoricalAnalysis: true,
+      status: 'BLOCKED',
       warnings,
-      blockers: [],
+      blockers,
     };
   }
 

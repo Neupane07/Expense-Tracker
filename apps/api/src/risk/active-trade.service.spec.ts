@@ -99,6 +99,37 @@ describe('ActiveTradeService', () => {
     );
   });
 
+  it('reports intraday broker positions as product mismatch instead of unmatched', async () => {
+    const prisma = {
+      tradeJournalEntry: {
+        findMany: jest.fn().mockResolvedValue([journalEntry()]),
+      },
+      brokerPositionSnapshot: {
+        aggregate: jest.fn().mockResolvedValue({ _max: { asOf: new Date() } }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            tradingSymbol: 'INFY',
+            productType: 'INTRADAY',
+            netQty: { toNumber: () => 10 },
+          },
+        ]),
+      },
+    };
+    const service = new ActiveTradeService(prisma as unknown as PrismaService);
+
+    const result = await service.reconcile('user-1');
+
+    expect(result.confirmedCount).toBe(0);
+    expect(result.trades[0]?.classification).toBe('incomplete');
+    expect(result.trades[0]?.warnings).toContain(
+      'BROKER_POSITION_PRODUCT_OR_SIDE_MISMATCH',
+    );
+    expect(result.trades[0]?.warnings).not.toContain(
+      'ACTIVE_JOURNAL_WITHOUT_BROKER_POSITION',
+    );
+    expect(result.trades[0]?.brokerPositionQty).toBe(10);
+  });
+
   it('marks quantity mismatches as incomplete and avoids double-counting stop-loss exposure', async () => {
     const prisma = {
       tradeJournalEntry: {

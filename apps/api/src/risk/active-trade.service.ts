@@ -62,16 +62,17 @@ export class ActiveTradeService {
       this.findLatestPositions(userId),
     ]);
 
-    const deliveryPositions = positions
+    const brokerPositions = positions
       .map((position) => ({
         tradingSymbol: position.tradingSymbol.toUpperCase(),
         productType: position.productType,
         netQty: this.decimalToNumber(position.netQty),
       }))
-      .filter(
-        (position) =>
-          position.netQty !== 0 && isDeliveryProduct(position.productType),
-      );
+      .filter((position) => position.netQty !== 0);
+
+    const deliveryPositions = brokerPositions.filter((position) =>
+      isDeliveryProduct(position.productType),
+    );
 
     const journalBySymbol = groupJournalBySymbol(journalActive);
     const usedPositionKeys = new Set<string>();
@@ -86,6 +87,9 @@ export class ActiveTradeService {
         warnings.push('DUPLICATE_ACTIVE_JOURNAL_FOR_SYMBOL');
       }
 
+      const allSymbolPositions = brokerPositions.filter(
+        (position) => position.tradingSymbol === symbol,
+      );
       const symbolPositions = deliveryPositions.filter(
         (position) => position.tradingSymbol === symbol,
       );
@@ -95,6 +99,7 @@ export class ActiveTradeService {
         const reconciliation = this.reconcileJournalEntry(
           entry,
           symbolPositions,
+          allSymbolPositions,
           usedPositionKeys,
           symbolConfirmed,
         );
@@ -164,7 +169,8 @@ export class ActiveTradeService {
 
   private reconcileJournalEntry(
     entry: JournalActiveRow,
-    symbolPositions: BrokerPositionRow[],
+    deliverySymbolPositions: BrokerPositionRow[],
+    allSymbolPositions: BrokerPositionRow[],
     usedPositionKeys: Set<string>,
     symbolAlreadyConfirmed: boolean,
   ): ReconciledActiveTrade {
@@ -223,26 +229,27 @@ export class ActiveTradeService {
       });
     }
 
-    const matchingPositions = symbolPositions.filter((position) =>
+    const matchingPositions = deliverySymbolPositions.filter((position) =>
       positionMatchesJournalSide(position, side),
     );
 
     if (matchingPositions.length === 0) {
-      const incompatiblePosition = symbolPositions[0];
-      const brokerPositionQty = incompatiblePosition?.netQty ?? null;
+      const brokerPositionQty = allSymbolPositions[0]?.netQty ?? null;
 
       return this.buildTrade({
         symbol,
         journalEntryId: entry.id,
-        classification: incompatiblePosition ? 'incomplete' : 'unmatched',
+        classification:
+          allSymbolPositions.length > 0 ? 'incomplete' : 'unmatched',
         quantity,
         plannedEntry,
         plannedStopLoss,
         maxLossIfStopHit,
         brokerPositionQty,
-        warnings: incompatiblePosition
-          ? ['BROKER_POSITION_PRODUCT_OR_SIDE_MISMATCH']
-          : ['ACTIVE_JOURNAL_WITHOUT_BROKER_POSITION'],
+        warnings:
+          allSymbolPositions.length > 0
+            ? ['BROKER_POSITION_PRODUCT_OR_SIDE_MISMATCH']
+            : ['ACTIVE_JOURNAL_WITHOUT_BROKER_POSITION'],
       });
     }
 
