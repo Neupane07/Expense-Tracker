@@ -67,7 +67,7 @@ export const scannerReadinessOutputSchema = z
   })
   .passthrough();
 
-export const scanSwingCandidatesOutputSchema = z
+export const scanSwingCandidatesSuccessOutputSchema = z
   .object({
     runId: z.string(),
     runAt: asIsoString,
@@ -79,6 +79,22 @@ export const scanSwingCandidatesOutputSchema = z
     researchDisclaimer: z.string().optional(),
   })
   .passthrough();
+
+export const scanSwingCandidatesBlockedOutputSchema = z
+  .object({
+    message: z.string().optional(),
+    status: z.enum(['READY', 'DEGRADED', 'BLOCKED']).optional(),
+    blockers: z.array(z.string()).optional(),
+    warnings: z.array(z.string()).optional(),
+    universe: z.array(z.string()).optional(),
+    universeSource: z.enum(['holdings', 'symbols']).optional(),
+  })
+  .passthrough();
+
+export const scanSwingCandidatesOutputSchema = z.union([
+  scanSwingCandidatesSuccessOutputSchema,
+  scanSwingCandidatesBlockedOutputSchema,
+]);
 
 export const tradeValidationOutputSchema = z
   .object({

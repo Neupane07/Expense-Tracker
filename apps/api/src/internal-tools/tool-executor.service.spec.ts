@@ -52,7 +52,7 @@ describe('ToolExecutorService', () => {
       handler: () =>
         Promise.resolve({
           status: 'ok' as const,
-          data: { symbol: 'TCS', apiKey: 'secret' },
+          data: { symbol: 'TCS', apiKey: 'secret', entry: 100, target: 120 },
         }),
     });
 
@@ -64,6 +64,8 @@ describe('ToolExecutorService', () => {
     expect(envelope.tool).toBe('demo_tool');
     expect(envelope.auditId).toBe('audit-1');
     expect((envelope.data as { apiKey: string }).apiKey).toBe('[REDACTED]');
+    expect((envelope.data as { entry: number }).entry).toBe(100);
+    expect((envelope.data as { target: number }).target).toBe(120);
   });
 
   it('returns rejected envelope with audit for invalid input', async () => {

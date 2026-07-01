@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ScannerReadinessService } from '../../scanner/scanner-readiness.service';
+import { throwIfAborted } from '../tool-abort';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
 import { scannerReadinessOutputSchema } from '../tool-output-schemas';
 import {
@@ -27,7 +28,9 @@ export class GetScannerReadinessTool {
     context: ToolContext,
     input: ScannerReadinessInput,
   ): Promise<ToolHandlerResult> {
+    throwIfAborted(context.abortSignal);
     const report = await this.readiness.getReadiness(context.userId, input);
+    throwIfAborted(context.abortSignal);
 
     return {
       status:

@@ -60,7 +60,7 @@ export class ToolExecutorService {
         durationMs: Date.now() - startedAt,
         result: handlerResult,
       });
-      const redactedEnvelope = this.redaction.redactValue(envelope);
+      const redactedEnvelope = this.redaction.redactResponse(envelope);
       this.assertResultSize(
         redactedEnvelope,
         definition.maxResultBytes ?? DEFAULT_MAX_RESULT_BYTES,
@@ -95,7 +95,7 @@ export class ToolExecutorService {
           errorCode: normalized.errorCode,
         },
       });
-      const redactedEnvelope = this.redaction.redactValue(envelope);
+      const redactedEnvelope = this.redaction.redactResponse(envelope);
 
       await this.audit.complete({
         auditId: auditRow.id,

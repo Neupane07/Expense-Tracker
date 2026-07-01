@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ValidateTradeInput } from '../../risk/risk.dto';
 import { TradeValidationService } from '../../risk/trade-validation.service';
+import { throwIfAborted } from '../tool-abort';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
 import { tradeValidationOutputSchema } from '../tool-output-schemas';
 import { validateTradeSetupInputSchema } from '../tool-schemas';
@@ -25,10 +26,12 @@ export class ValidateTradeSetupTool {
     context: ToolContext,
     input: ValidateTradeInput,
   ): Promise<ToolHandlerResult> {
+    throwIfAborted(context.abortSignal);
     const result = await this.tradeValidation.validateTrade(
       context.userId,
       input,
     );
+    throwIfAborted(context.abortSignal);
 
     return {
       status: result.valid ? 'ok' : 'rejected',

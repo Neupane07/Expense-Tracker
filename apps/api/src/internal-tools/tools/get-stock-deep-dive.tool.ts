@@ -3,6 +3,7 @@ import { InstrumentVerificationService } from '../../market-data/instrument-veri
 import { MarketDataService } from '../../market-data/market-data.service';
 import { ResearchSnapshotService } from '../../research/research-snapshot.service';
 import { evaluateCandleCorporateActionPolicy } from '../corporate-action-check';
+import { throwIfAborted } from '../tool-abort';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
 import { stockDeepDiveOutputSchema } from '../tool-output-schemas';
 import { symbolInputSchema, type SymbolInput } from '../tool-schemas';
@@ -37,6 +38,7 @@ export class GetStockDeepDiveTool {
     context: ToolContext,
     input: SymbolInput,
   ): Promise<ToolHandlerResult> {
+    throwIfAborted(context.abortSignal);
     const symbol = input.symbol.trim().toUpperCase();
     const missingSections: Array<{ id: string; reason: string }> = [
       { id: 'fundamentals', reason: MISSING_SECTIONS.fundamentals },
@@ -46,8 +48,10 @@ export class GetStockDeepDiveTool {
     const warnings: string[] = [];
     const rejectReasons: string[] = [];
     const sections: Record<string, unknown> = {};
+    let historicalAnalysisBlocked = false;
 
     try {
+      throwIfAborted(context.abortSignal);
       sections.instrument = await this.marketData.getInstrument(
         context.userId,
         symbol,
@@ -62,6 +66,7 @@ export class GetStockDeepDiveTool {
     }
 
     try {
+      throwIfAborted(context.abortSignal);
       sections.price = await this.marketData.getLatestPrice(
         context.userId,
         symbol,
@@ -76,6 +81,7 @@ export class GetStockDeepDiveTool {
     }
 
     try {
+      throwIfAborted(context.abortSignal);
       sections.candles = await this.marketData.getCandles(
         context.userId,
         symbol,
@@ -99,6 +105,7 @@ export class GetStockDeepDiveTool {
       sections.corporateAction = corporateAction;
       warnings.push(...corporateAction.warnings);
       blockersFromCorporateAction(corporateAction, rejectReasons);
+      historicalAnalysisBlocked = corporateAction.blocksHistoricalAnalysis;
     } catch (error) {
       if (error instanceof NotFoundException) {
         sections.candles = null;
@@ -108,23 +115,34 @@ export class GetStockDeepDiveTool {
       }
     }
 
-    try {
-      sections.indicators = await this.marketData.getLatestIndicators(
-        context.userId,
-        symbol,
-      );
-      if (!(sections.indicators as { indicators?: unknown })?.indicators) {
-        warnings.push('INDICATORS_MISSING');
-      }
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        sections.indicators = null;
-        warnings.push('INDICATORS_MISSING');
-      } else {
-        throw error;
+    if (historicalAnalysisBlocked) {
+      warnings.push('INDICATORS_BLOCKED_UNVERIFIED_ADJUSTMENT');
+      sections.indicators = {
+        blocked: true,
+        reason: 'HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT',
+        indicators: null,
+      };
+    } else {
+      try {
+        throwIfAborted(context.abortSignal);
+        sections.indicators = await this.marketData.getLatestIndicators(
+          context.userId,
+          symbol,
+        );
+        if (!(sections.indicators as { indicators?: unknown })?.indicators) {
+          warnings.push('INDICATORS_MISSING');
+        }
+      } catch (error) {
+        if (error instanceof NotFoundException) {
+          sections.indicators = null;
+          warnings.push('INDICATORS_MISSING');
+        } else {
+          throw error;
+        }
       }
     }
 
+    throwIfAborted(context.abortSignal);
     const research = await this.researchSnapshots.getSymbolResearch(
       context.userId,
       symbol,

@@ -87,7 +87,7 @@ export class ToolAuditService {
       rejectCount: row.rejectCount,
       errorCode: row.errorCode,
       inputHash: row.inputHash,
-      inputMeta: this.redaction.redactValue(row.inputMeta),
+      inputMeta: this.redaction.redactAuditRecord(row.inputMeta),
       createdAt: row.createdAt.toISOString(),
     }));
   }
@@ -113,7 +113,7 @@ export class ToolAuditService {
       rejectCount: row.rejectCount,
       errorCode: row.errorCode,
       inputHash: row.inputHash,
-      inputMeta: this.redaction.redactValue(row.inputMeta),
+      inputMeta: this.redaction.redactAuditRecord(row.inputMeta),
       createdAt: row.createdAt.toISOString(),
     };
   }

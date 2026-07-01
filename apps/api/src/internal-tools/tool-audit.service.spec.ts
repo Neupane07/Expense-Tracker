@@ -52,12 +52,14 @@ describe('ToolAuditService', () => {
     });
 
     expect(JSON.stringify(persistedInputMeta)).not.toContain('secret');
-    expect(persistedInputMeta).toMatchObject({
-      keys: expect.arrayContaining(['symbol']) as string[],
-      fieldTypes: expect.objectContaining({
-        symbol: 'string',
-        entry: 'redacted',
-      }),
+    const meta = persistedInputMeta as {
+      keys?: string[];
+      fieldTypes?: Record<string, string>;
+    };
+    expect(meta.keys).toEqual(expect.arrayContaining(['symbol', 'apiKey']));
+    expect(meta.fieldTypes).toMatchObject({
+      symbol: 'string',
+      apiKey: 'redacted',
     });
 
     const listed = await service.listForUser('user-a');

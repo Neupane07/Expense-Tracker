@@ -9,6 +9,7 @@ import { IndicatorsService } from '../../market-data/indicators.service';
 import { PricesService } from '../../market-data/prices.service';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
 import { evaluateCandleCorporateActionPolicy } from '../corporate-action-check';
+import { throwIfAborted } from '../tool-abort';
 import {
   marketDataStatusInputSchema,
   type MarketDataStatusInput,
@@ -43,8 +44,10 @@ export class GetMarketDataStatusTool {
     context: ToolContext,
     input: MarketDataStatusInput,
   ): Promise<ToolHandlerResult> {
+    throwIfAborted(context.abortSignal);
     const asOf = new Date();
     const universe = await this.resolveUniverse(context.userId, input);
+    throwIfAborted(context.abortSignal);
     const symbols: Array<{
       symbol: string;
       status: string;
@@ -71,7 +74,13 @@ export class GetMarketDataStatusTool {
     }
 
     for (const symbol of universe) {
-      const status = await this.checkSymbol(context.userId, symbol, asOf);
+      throwIfAborted(context.abortSignal);
+      const status = await this.checkSymbol(
+        context.userId,
+        symbol,
+        asOf,
+        context.abortSignal,
+      );
       symbols.push(status);
       warnings.push(...status.warnings);
       rejectReasons.push(...status.blockers);
@@ -97,12 +106,18 @@ export class GetMarketDataStatusTool {
     };
   }
 
-  private async checkSymbol(userId: string, symbol: string, asOf: Date) {
+  private async checkSymbol(
+    userId: string,
+    symbol: string,
+    asOf: Date,
+    abortSignal?: AbortSignal,
+  ) {
     const normalizedSymbol = symbol.trim().toUpperCase();
     const warnings: string[] = [];
     const blockers: string[] = [];
 
     try {
+      throwIfAborted(abortSignal);
       const instrument = await this.instruments.findBySymbol(
         userId,
         normalizedSymbol,
@@ -156,12 +171,34 @@ export class GetMarketDataStatusTool {
         blockers.push('HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT');
       }
 
-      const indicatorResponse = await this.indicators.getLatest(
-        userId,
-        normalizedSymbol,
-      );
-      if (!indicatorResponse.indicators) {
-        warnings.push('INDICATORS_MISSING');
+      let indicators: {
+        present: boolean;
+        asOf: Date | string | null;
+        blocked?: boolean;
+        reason?: string;
+      };
+
+      if (corporateAction.blocksHistoricalAnalysis) {
+        warnings.push('INDICATORS_BLOCKED_UNVERIFIED_ADJUSTMENT');
+        indicators = {
+          present: false,
+          asOf: null,
+          blocked: true,
+          reason: 'HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT',
+        };
+      } else {
+        throwIfAborted(abortSignal);
+        const indicatorResponse = await this.indicators.getLatest(
+          userId,
+          normalizedSymbol,
+        );
+        if (!indicatorResponse.indicators) {
+          warnings.push('INDICATORS_MISSING');
+        }
+        indicators = {
+          present: Boolean(indicatorResponse.indicators),
+          asOf: indicatorResponse.indicators?.asOfDate ?? null,
+        };
       }
 
       const status =
@@ -182,10 +219,7 @@ export class GetMarketDataStatusTool {
         },
         candles: { count: candleCount },
         corporateAction,
-        indicators: {
-          present: Boolean(indicatorResponse.indicators),
-          asOf: indicatorResponse.indicators?.asOfDate ?? null,
-        },
+        indicators,
         warnings: [...new Set(warnings)],
         blockers: [...new Set(blockers)],
       };

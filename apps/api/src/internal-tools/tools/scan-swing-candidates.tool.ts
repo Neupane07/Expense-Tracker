@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { RunSwingScanInput } from '../../scanner/scanner.dto';
 import { SwingScannerService } from '../../scanner/swing-scanner.service';
+import { throwIfAborted } from '../tool-abort';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
 import { scanSwingCandidatesInputSchema } from '../tool-schemas';
 import { scanSwingCandidatesOutputSchema } from '../tool-output-schemas';
@@ -25,10 +26,12 @@ export class ScanSwingCandidatesTool {
     context: ToolContext,
     input: RunSwingScanInput,
   ): Promise<ToolHandlerResult> {
+    throwIfAborted(context.abortSignal);
     try {
       const result = await this.swingScanner.runScan(context.userId, input, {
         abortSignal: context.abortSignal,
       });
+      throwIfAborted(context.abortSignal);
       const rejectedCount = result.candidates.filter(
         (candidate) => candidate.status === 'rejected',
       ).length;

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PortfolioService } from '../../portfolio/portfolio.service';
 import { assessPortfolioSnapshotQuality } from '../portfolio-snapshot-quality';
+import { throwIfAborted } from '../tool-abort';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
 import { emptyInputSchema } from '../tool-schemas';
 import { portfolioSnapshotOutputSchema } from '../tool-output-schemas';
@@ -21,7 +22,9 @@ export class GetPortfolioSnapshotTool {
   };
 
   async handle(context: ToolContext): Promise<ToolHandlerResult> {
+    throwIfAborted(context.abortSignal);
     const snapshot = await this.portfolio.getSnapshot(context.userId);
+    throwIfAborted(context.abortSignal);
     const quality = assessPortfolioSnapshotQuality({
       warnings: Array.isArray(snapshot.warnings) ? snapshot.warnings : [],
       listedSummary: snapshot.listedSummary,

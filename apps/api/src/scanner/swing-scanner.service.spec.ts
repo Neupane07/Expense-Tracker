@@ -77,6 +77,7 @@ describe('SwingScannerService', () => {
             ...data,
           }),
         ),
+        delete: jest.fn().mockResolvedValue({}),
         findFirst: jest.fn(),
       },
     };
@@ -519,5 +520,37 @@ describe('SwingScannerService', () => {
     ).rejects.toThrow('SCAN_ABORTED_TIMEOUT');
 
     expect(prisma.swingScanRun.create).not.toHaveBeenCalled();
+  });
+
+  it('deletes persisted run when aborted immediately after create', async () => {
+    const { service, prisma } = createService();
+    const abortController = new AbortController();
+
+    prisma.swingScanRun.create = jest.fn().mockImplementation(() => {
+      abortController.abort();
+      return Promise.resolve({
+        id: 'run-1',
+        runAt: new Date('2026-05-30T10:00:00.000Z'),
+        universeSource: 'symbols',
+        universe: ['INFY'],
+        candidateCount: 0,
+        candidates: [],
+        warnings: [],
+      });
+    });
+
+    await expect(
+      service.runScan(
+        'user-1',
+        { symbols: ['INFY'] },
+        {
+          abortSignal: abortController.signal,
+        },
+      ),
+    ).rejects.toThrow('SCAN_ABORTED_TIMEOUT');
+
+    expect(prisma.swingScanRun.delete).toHaveBeenCalledWith({
+      where: { id: 'run-1' },
+    });
   });
 });

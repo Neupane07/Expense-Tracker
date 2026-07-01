@@ -3,9 +3,11 @@ import { ToolRedactionService } from './tool-redaction.service';
 describe('ToolRedactionService', () => {
   const service = new ToolRedactionService();
 
-  it('redacts realistic secret-shaped keys and values', () => {
+  it('redacts realistic secret-shaped keys and values from responses', () => {
     const input = {
       symbol: 'RELIANCE',
+      entry: 2500,
+      target: 2700,
       apiKey: 'dhan-api-key-abcdef123456',
       apiSecret: 'super-secret-value',
       accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig',
@@ -15,10 +17,12 @@ describe('ToolRedactionService', () => {
       },
     };
 
-    const redacted = service.redactValue(input);
+    const redacted = service.redactResponse(input);
 
     expect(redacted).toEqual({
       symbol: 'RELIANCE',
+      entry: 2500,
+      target: 2700,
       apiKey: '[REDACTED]',
       apiSecret: '[REDACTED]',
       accessToken: '[REDACTED]',
@@ -27,6 +31,16 @@ describe('ToolRedactionService', () => {
         authorization: '[REDACTED]',
       },
     });
+  });
+
+  it('hashes canonicalized input with financial values preserved', () => {
+    const hashA = service.hashInputMeta({ symbol: 'TCS', entry: 100 });
+    const hashB = service.hashInputMeta({ symbol: 'TCS', entry: 200 });
+    const hashC = service.hashInputMeta({ symbol: 'INFY', entry: 100 });
+
+    expect(hashA).not.toEqual(hashB);
+    expect(hashA).not.toEqual(hashC);
+    expect(hashB).not.toEqual(hashC);
   });
 
   it('builds hashed input metadata without raw secrets', () => {

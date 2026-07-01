@@ -4,6 +4,10 @@ import { ResearchItemsService } from './research-items.service';
 import { ResearchQualityService } from './research-quality.service';
 import { ResearchSnapshotService } from './research-snapshot.service';
 
+function daysAgo(dayCount: number, from = new Date()) {
+  return new Date(from.getTime() - dayCount * 24 * 60 * 60 * 1000);
+}
+
 describe('ResearchQualityService', () => {
   const quality = new ResearchQualityService();
 
@@ -192,7 +196,7 @@ describe('ResearchSnapshotService', () => {
   }
 
   it('generates deterministic snapshot summary from stored items', async () => {
-    const recent = new Date('2026-05-28T00:00:00.000Z');
+    const recent = daysAgo(5);
     const { service } = createSnapshotService({
       rows: [
         {
@@ -220,6 +224,37 @@ describe('ResearchSnapshotService', () => {
     expect(result.snapshot.summary).toContain('Strong order book');
     expect(result.snapshot.positiveCount).toBe(1);
     expect(result.dataQuality.status).toBe('user-provided');
+  });
+
+  it('classifies manual evidence older than threshold as stale', async () => {
+    const old = daysAgo(45);
+    const { service } = createSnapshotService({
+      rows: [
+        {
+          id: 'item-1',
+          userId: 'user-1',
+          instrumentId: null,
+          symbol: 'INFY',
+          title: 'Older manual note',
+          summary: 'Entered weeks ago.',
+          category: 'MANAGEMENT_COMMENTARY',
+          impact: 'POSITIVE',
+          sourceType: 'MANUAL',
+          sourceName: 'User',
+          sourceUrl: 'https://example.com/note',
+          publishedAt: old,
+          fetchedAt: old,
+          asOf: old,
+          evidence: [],
+        },
+      ],
+    });
+
+    const result = await service.regenerateSnapshot('user-1', 'INFY');
+
+    expect(result.dataQuality.status).toBe('stale');
+    expect(result.dataQuality.hasUserProvidedEvidence).toBe(true);
+    expect(result.dataQuality.warnings).toContain('STALE_RESEARCH_EVIDENCE');
   });
 
   it('returns missing evidence warnings for scanner integration', async () => {

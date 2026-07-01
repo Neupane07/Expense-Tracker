@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ResearchSnapshotService } from '../../research/research-snapshot.service';
+import { throwIfAborted } from '../tool-abort';
 import type { ToolContext, ToolHandlerResult } from '../tool.types';
 import { researchSnapshotOutputSchema } from '../tool-output-schemas';
 import { symbolInputSchema, type SymbolInput } from '../tool-schemas';
@@ -24,11 +25,13 @@ export class GetResearchSnapshotTool {
     context: ToolContext,
     input: SymbolInput,
   ): Promise<ToolHandlerResult> {
+    throwIfAborted(context.abortSignal);
     const symbol = input.symbol.trim().toUpperCase();
     const research = await this.researchSnapshots.getSymbolResearch(
       context.userId,
       symbol,
     );
+    throwIfAborted(context.abortSignal);
     const missing = research.items.length === 0;
 
     return {

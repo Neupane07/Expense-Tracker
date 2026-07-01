@@ -2,10 +2,11 @@
 
 ## Snapshot
 
-Repository inspection date: 2026-06-14
+Repository inspection date: 2026-07-01
 
-Phase 8 current-state hardening and Phase 9 internal read-only tools are
-implemented on the working tree described in this document.
+Phase 8 current-state hardening is complete. Phase 9 internal read-only tools
+exist on the backend and are actively being stabilized (contracts, tests, docs).
+Phase 10 Tool Tester UI is the next product milestone.
 
 ## Executive Summary
 
@@ -14,11 +15,16 @@ working Expense Tracker plus implemented portfolio, read-only Dhan sync,
 mutual-fund valuation, market-data, risk, scanner readiness, trade-journal, and
 manual research foundations with browser pages and unit/e2e tests.
 
-It is not yet the full target system. The largest missing architectural piece
-is the Tool Tester UI and read-only MCP adapter. Important domain gaps also
-remain in instrument-master coverage, corporate-action ingestion, automated
-research sources, market regime/sector breadth, and broad scanner universe
-expansion.
+The canonical internal read-only tool registry is implemented in the API with
+versioned schemas, execution audit persistence, and eight initial tools. It is
+callable over authenticated `/tools` endpoints but not yet exercised through a
+browser Tool Tester.
+
+The largest remaining architectural gap for AI-facing workflows is the Tool
+Tester UI (Phase 10), followed by the read-only MCP adapter (Phase 11).
+Important domain gaps also remain in instrument-master coverage, corporate-action
+ingestion, automated research sources, market regime/sector breadth, and broad
+scanner universe expansion.
 
 ## Implemented
 
@@ -67,13 +73,23 @@ expansion.
 - research freshness/risk flags integrated into scanner confidence
 - functional `/scanner`, `/trade-journal`, and `/research` pages
 - canonical internal read-only tool registry with versioned Zod schemas,
-  standard response envelope, redaction, timeout/result-size controls, and
+  standard response envelope, secret redaction, timeout/result-size controls, and
   persisted execution audit metadata
 - eight initial tools over portfolio, market-data status, scanner readiness,
   swing scan, trade validation, stock deep dive, research snapshot, and manual
   Super Order plan formatting (no broker calls)
+- authenticated `/tools` catalog, schema, execute, and audit endpoints
 
 ## Partial
+
+### Internal tools (Phase 9 backend)
+
+- Backend registry, executor, audit persistence, and eight tool handlers exist.
+- Contract stabilization is ongoing: response redaction vs audit metadata,
+  blocked-tool output shapes, timeout cancellation, and research freshness
+  semantics must stay aligned across services, tests, and docs.
+- No browser Tool Tester route yet. The AI-facing contract is API-real but not
+  product-accepted until Phase 10.
 
 ### Instrument and market-data foundation
 
@@ -115,6 +131,8 @@ expansion.
 ### Research
 
 - Manual/user-URL evidence and deterministic snapshots are implemented.
+- Freshness is time-based for all sources. Manual evidence within the threshold
+  reports `user-provided`; older manual evidence reports `stale`.
 - Official filing and news providers are explicit stubs and automated source
   types are rejected.
 - There is no scheduled refresh, source deduplication policy, provider trust
@@ -126,6 +144,7 @@ expansion.
 - Authenticated Finance OS e2e tests cover session boundaries, broker credential
   redaction, user-scoped journal access, scanner readiness, and internal tool
   catalog/audit/execute boundaries.
+- Internal-tool contract, redaction, audit, and blocked-path unit tests exist.
 - Focused web tests cover research-only disclaimers and warning/reject/readiness
   rendering via Vitest + Testing Library.
 - No background worker/scheduler exists for broker, NAV, market, or research
@@ -133,8 +152,8 @@ expansion.
 
 ## Missing
 
-- Tool Tester UI
-- read-only MCP server/adapter
+- Tool Tester UI (Phase 10)
+- read-only MCP server/adapter (Phase 11)
 - instrument-master and corporate-action ingestion pipelines
 - official/licensed filing and news ingestion
 - market regime, index/sector strength, and broad scanner universe
@@ -188,9 +207,11 @@ No Tool Tester route exists.
 - scanner: `SwingScanRun`
 - journal: `TradeJournalEntry`
 - research: `ResearchItem`, `ResearchEvidence`, `ResearchSnapshot`
+- internal tools: `ToolExecutionAudit`
 
-No tool-definition, tool-audit, corporate-action, index/sector-series, or
-user-risk-settings model exists.
+No tool-definition catalog table, corporate-action, index/sector-series, or
+user-risk-settings model exists. Tool definitions live in code via the registry
+service; audit rows store execution metadata only.
 
 ## Current API Surface
 
@@ -205,9 +226,13 @@ Implemented authenticated route groups:
 - `/scanner/readiness`
 - `/trade-journal/entries/*`
 - `/research/*`
+- `/tools` — catalog of registered tools
+- `/tools/:name` — tool schema
+- `/tools/:name/execute` — execute tool (read-only handlers)
+- `/tools/audits`, `/tools/audits/:auditId` — execution audit history
 
 Public routes are limited to health and required authentication entry/session
-flow. No MCP or generic tool execution endpoint exists.
+flow. No MCP adapter exists yet.
 
 ## Test Inventory
 
@@ -221,18 +246,28 @@ Backend tests cover:
 - position sizing and trade validation
 - scanner detection, risk integration, confidence caps, and no-order behavior
 - trade-journal lifecycle and research evidence/snapshot behavior
+- internal-tool registry, executor envelope, redaction, audit metadata, and
+  blocked/stale contract paths
 
 Remaining high-value gaps:
 
 - broader authenticated API e2e coverage across portfolio/market-data/research
 - controller/DTO validation contracts
-- tool contract tests once the internal layer exists
+- Tool Tester UI integration tests (Phase 10)
 - deployment/security tests for MCP only after it exists
 
 ## Immediate Recommendation
 
-Execute Phase 9 in `docs/ROADMAP.md`: build the internal read-only tool registry
-and Tool Tester on top of the Phase 8 readiness and data-quality contracts.
+Stabilize internal-tool and research contracts on the backend until tests and
+docs agree. Then execute Phase 10 in `docs/ROADMAP.md`: build the Tool Tester UI
+on top of `/tools` as the acceptance harness before MCP or broader market-data
+work.
+
+Recommended order:
+
+```text
+backend contract stability -> Tool Tester UI -> MCP adapter -> provider/data breadth
+```
 
 ## Non-Negotiable Boundaries
 

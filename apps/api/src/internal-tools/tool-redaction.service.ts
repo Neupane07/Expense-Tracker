@@ -17,36 +17,40 @@ const SECRET_VALUE_PATTERNS = [
 
 @Injectable()
 export class ToolRedactionService {
-  redactValue<T>(value: T): T {
-    return this.redactUnknown(value) as T;
+  /** Redact credentials and secret-shaped values from tool HTTP responses. */
+  redactResponse<T>(value: T): T {
+    return this.redactSecretsOnly(value) as T;
+  }
+
+  /** Redact any secret material when returning persisted audit metadata. */
+  redactAuditRecord<T>(value: T): T {
+    return this.redactSecretsOnly(value) as T;
   }
 
   hashInputMeta(input: unknown): string {
-    const redacted = this.redactUnknown(input);
-    const serialized = JSON.stringify(redacted ?? null);
+    const secretsRedacted = this.redactSecretsOnly(input);
+    const serialized = JSON.stringify(this.canonicalize(secretsRedacted));
     return createHash('sha256').update(serialized).digest('hex');
   }
 
   buildInputMeta(input: unknown): Record<string, unknown> {
-    const redacted = this.redactUnknown(input);
-
-    if (redacted == null || typeof redacted !== 'object') {
-      return { value: typeof redacted };
+    if (input == null || typeof input !== 'object') {
+      return { value: typeof input };
     }
 
-    if (Array.isArray(redacted)) {
-      return { keys: [], arrayLength: redacted.length };
+    if (Array.isArray(input)) {
+      return { keys: [], arrayLength: input.length };
     }
 
-    const record = redacted as Record<string, unknown>;
+    const record = input as Record<string, unknown>;
     return {
       keys: Object.keys(record).sort(),
       fieldCount: Object.keys(record).length,
-      fieldTypes: this.describeFieldTypes(record),
+      fieldTypes: this.describeAuditFieldTypes(record),
     };
   }
 
-  private describeFieldTypes(record: Record<string, unknown>) {
+  private describeAuditFieldTypes(record: Record<string, unknown>) {
     const fieldTypes: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(record)) {
@@ -76,7 +80,7 @@ export class ToolRedactionService {
     return fieldTypes;
   }
 
-  private redactUnknown(value: unknown, parentKey?: string): unknown {
+  private redactSecretsOnly(value: unknown, parentKey?: string): unknown {
     if (value == null) {
       return value;
     }
@@ -94,15 +98,11 @@ export class ToolRedactionService {
     }
 
     if (typeof value === 'number' || typeof value === 'boolean') {
-      if (parentKey && AUDIT_FINANCIAL_VALUE_KEY_PATTERN.test(parentKey)) {
-        return REDACTED;
-      }
-
       return value;
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => this.redactUnknown(item));
+      return value.map((item) => this.redactSecretsOnly(item));
     }
 
     if (typeof value === 'object') {
@@ -114,18 +114,32 @@ export class ToolRedactionService {
           continue;
         }
 
-        if (AUDIT_FINANCIAL_VALUE_KEY_PATTERN.test(key)) {
-          output[key] = REDACTED;
-          continue;
-        }
-
-        output[key] = this.redactUnknown(nested, key);
+        output[key] = this.redactSecretsOnly(nested, key);
       }
 
       return output;
     }
 
     return value;
+  }
+
+  private canonicalize(value: unknown): unknown {
+    if (value == null || typeof value !== 'object') {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.canonicalize(item));
+    }
+
+    const record = value as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+
+    for (const key of Object.keys(record).sort()) {
+      sorted[key] = this.canonicalize(record[key]);
+    }
+
+    return sorted;
   }
 
   private looksLikeSecret(value: string) {

@@ -166,6 +166,11 @@ export class SwingScannerService {
       },
     });
 
+    if (options.abortSignal?.aborted) {
+      await this.prisma.swingScanRun.delete({ where: { id: run.id } });
+      throw new RequestTimeoutException('SCAN_ABORTED_TIMEOUT');
+    }
+
     return {
       runId: run.id,
       runAt: run.runAt,

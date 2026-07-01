@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
 import { CandlesService } from '../market-data/candles.service';
 import { IndicatorsService } from '../market-data/indicators.service';
@@ -11,6 +11,8 @@ import { ResearchSnapshotService } from '../research/research-snapshot.service';
 import { GetMarketDataStatusTool } from './tools/get-market-data-status.tool';
 import { GetStockDeepDiveTool } from './tools/get-stock-deep-dive.tool';
 import { GetPortfolioSnapshotTool } from './tools/get-portfolio-snapshot.tool';
+import { ScanSwingCandidatesTool } from './tools/scan-swing-candidates.tool';
+import { scanSwingCandidatesOutputSchema } from './tool-output-schemas';
 
 const context = {
   userId: 'user-a',
@@ -22,6 +24,10 @@ describe('Market data and deep-dive tool contracts', () => {
   const instrumentVerification = new InstrumentVerificationService();
 
   it('get_market_data_status blocks unverified corporate-action history', async () => {
+    const indicatorsGetLatest = jest.fn().mockResolvedValue({
+      indicators: { asOfDate: new Date() },
+    });
+
     const tool = new GetMarketDataStatusTool(
       {
         brokerHoldingSnapshot: {
@@ -47,9 +53,7 @@ describe('Market data and deep-dive tool contracts', () => {
         }),
       } as unknown as CandlesService,
       {
-        getLatest: jest.fn().mockResolvedValue({
-          indicators: { asOfDate: new Date() },
-        }),
+        getLatest: indicatorsGetLatest,
       } as unknown as IndicatorsService,
       new MarketDataQualityService(),
       instrumentVerification,
@@ -65,6 +69,16 @@ describe('Market data and deep-dive tool contracts', () => {
       (result.data as { symbols: Array<{ corporateAction: unknown }> })
         .symbols[0]?.corporateAction,
     ).toBeTruthy();
+    expect(indicatorsGetLatest).not.toHaveBeenCalled();
+    expect(
+      (
+        result.data as {
+          symbols: Array<{
+            indicators: { blocked?: boolean; present: boolean };
+          }>;
+        }
+      ).symbols[0]?.indicators,
+    ).toMatchObject({ blocked: true, present: false });
   });
 
   it('get_market_data_status returns unavailable for empty universe', async () => {
@@ -89,6 +103,8 @@ describe('Market data and deep-dive tool contracts', () => {
   });
 
   it('get_stock_deep_dive rejects when corporate-action policy blocks history', async () => {
+    const getLatestIndicators = jest.fn().mockResolvedValue({ indicators: {} });
+
     const tool = new GetStockDeepDiveTool(
       {
         getInstrument: jest.fn().mockResolvedValue({ symbol: 'INFY' }),
@@ -96,7 +112,7 @@ describe('Market data and deep-dive tool contracts', () => {
         getCandles: jest.fn().mockResolvedValue({
           candles: [{ isAdjusted: false }, { isAdjusted: false }],
         }),
-        getLatestIndicators: jest.fn().mockResolvedValue({ indicators: {} }),
+        getLatestIndicators,
       } as unknown as MarketDataService,
       {
         getSymbolResearch: jest.fn().mockResolvedValue({
@@ -119,6 +135,11 @@ describe('Market data and deep-dive tool contracts', () => {
       (result.data as { sections: { corporateAction: unknown } }).sections
         .corporateAction,
     ).toBeTruthy();
+    expect(getLatestIndicators).not.toHaveBeenCalled();
+    expect(
+      (result.data as { sections: { indicators: { blocked?: boolean } } })
+        .sections.indicators,
+    ).toMatchObject({ blocked: true });
   });
 
   it('get_stock_deep_dive returns unavailable when instrument mapping is missing', async () => {
@@ -152,6 +173,28 @@ describe('Market data and deep-dive tool contracts', () => {
 
     expect(result.status).toBe('unavailable');
     expect(result.rejectReasons).toContain('INSTRUMENT_MAPPING_MISSING');
+  });
+});
+
+describe('scan_swing_candidates blocked readiness', () => {
+  it('returns blocked payload that passes output schema validation', async () => {
+    const tool = new ScanSwingCandidatesTool({
+      runScan: jest.fn().mockRejectedValue(
+        new BadRequestException({
+          status: 'BLOCKED',
+          blockers: ['CREDENTIALS_MISSING'],
+          warnings: [],
+        }),
+      ),
+    } as never);
+
+    const result = await tool.handle(context, {});
+
+    expect(result.status).toBe('unavailable');
+    expect(result.errorCode).toBe('SCANNER_READINESS_BLOCKED');
+    expect(scanSwingCandidatesOutputSchema.safeParse(result.data).success).toBe(
+      true,
+    );
   });
 });
 
