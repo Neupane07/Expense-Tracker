@@ -1,161 +1,131 @@
-# MCP Tools
+# Read-Only AI and MCP Tools
 
-## Purpose
+## Status
 
-Finance OS may expose read-only MCP tools so an AI assistant can query verified portfolio, market, scanner, and risk data.
+Phase 9 complete: internal read-only tool registry is implemented in
+`apps/api/src/internal-tools`. Tool Tester UI and MCP adapter are not built
+yet.
 
-MCP tools are for decision support only.
+## Required Build Order
 
-They must not place, modify, or cancel orders in V1.
+1. harden data-quality/readiness contracts — done (Phase 8)
+2. build internal read-only tool registry — done (Phase 9)
+3. exercise it through the Tool Tester UI — next (Phase 10)
+4. expose an approved subset through MCP — after Tool Tester acceptance
 
-## Security Rules
+MCP must not be the first implementation of tool business logic. MCP and the
+Tool Tester must call the same registry entry points as
+`POST /tools/:name/execute`.
 
-MCP server must be protected.
+## HTTP Endpoints (Phase 9)
 
-Requirements:
+Authenticated session required for all routes.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/tools` | Catalog of registered tools with JSON schemas |
+| GET | `/tools/:name` | Single-tool schema and metadata |
+| POST | `/tools/:name/execute` | Execute tool; returns standard envelope |
+| GET | `/tools/audits` | Current user's redacted audit history |
+| GET | `/tools/audits/:auditId` | Single audit record (user-scoped) |
+
+## Internal Tool Contract
+
+Tools call existing application services and return a versioned standard
+envelope. See `docs/PRODUCT_PLAN.md` for the envelope and initial catalog.
+
+Required controls:
+
+- authenticated user context and ownership scoping
+- input/output schema validation
+- deterministic errors, warnings, and rejection reasons
+- source timestamps and data-quality metadata
+- execution timeout and result-size limit
+- secret and sensitive-payload redaction
+- audit ID and persisted audit metadata
+
+## Initial Read-Only Catalog
+
+### Portfolio
+
+- `get_portfolio_snapshot`
+
+### Market and stock
+
+- `get_market_data_status`
+- `get_stock_deep_dive`
+- `get_research_snapshot`
+
+### Scanner and risk
+
+- `get_scanner_readiness`
+- `scan_swing_candidates`
+- `validate_trade_setup`
+- `create_manual_super_order_plan`
+
+Deferred from initial catalog (may be added later):
+
+- `get_portfolio_risk_report`
+- `get_active_trades`
+- `get_stock_technicals`
+- `suggest_position_size`
+
+The plan tool returns manual BUY/DELIVERY parameters only after validation. It
+does not send anything to Dhan.
+
+## Tool Tester
+
+The tester should invoke the registry exactly as MCP later will. It should show:
+
+- tool name, version, description, and schemas
+- input JSON and validation errors
+- output JSON, data quality, warnings, rejects, and duration
+- redacted audit history
+
+This UI is how contracts, failure modes, and redaction are accepted before an
+external AI client is allowed to call them.
+
+## MCP Adapter
+
+MCP should be a thin adapter:
 
 ```text
-HTTPS only
-strong API token
-read-only by default
-no broker secrets exposed
-no Dhan token exposed
-no raw session cookies exposed
-audit log every tool call
+MCP request -> authenticate/authorize -> registry.execute -> MCP response
 ```
 
-If deployed publicly, use additional protections such as IP allowlist or private network access.
+Deployment requirements:
 
-## Tool Categories
+- encrypted transport
+- strong revocable credentials
+- least-privilege tool allowlist
+- rate limits and timeouts
+- audit every call
+- no raw browser session cookie forwarding
+- no broker credential exposure
 
-### Portfolio Tools
+## Forbidden Initial Tools
 
-- get_portfolio_snapshot
-- get_cash_and_margin
-- get_holdings
-- get_open_positions
-- get_active_trades
-- get_sector_exposure
-- get_portfolio_risk_report
+- `place_order`
+- `modify_order`
+- `cancel_order`
+- `auto_trade`
+- `trail_stop_loss`
+- `record_trade_plan`
+- `record_trade_exit`
+- any generic database/query execution tool
 
-### Market Tools
+Journal writes are excluded because initial MCP is read-only. The existing
+browser UI may continue to create and update journal entries through its
+authenticated application API.
 
-- get_market_regime
-- get_index_snapshot
-- get_sector_strength
-- get_global_cues
-- get_fii_dii_flows
+## AI Behavior Contract
 
-### Stock Tools
+An AI consumer should:
 
-- get_stock_snapshot
-- get_stock_technicals
-- get_stock_fundamentals
-- get_recent_filings
-- get_news_summary
-- get_peer_comparison
+- quote the tool's timestamps, sources, warnings, and rejects
+- distinguish stored evidence from inference
+- avoid filling missing fields from model memory
+- state when data is stale or incomplete
+- treat manual order parameters as a draft for user verification
 
-### Scanner Tools
-
-- scan_swing_candidates
-- scan_investment_candidates
-- scan_breakouts
-- scan_pullbacks
-- scan_rsi_reversals
-- scan_result_momentum
-
-### Risk Tools
-
-- validate_trade_setup
-- suggest_position_size
-- check_portfolio_fit
-- check_if_trade_is_chasing
-- create_super_order_plan
-
-### Journal Tools
-
-- get_trade_journal
-- record_trade_plan
-- record_trade_exit
-- get_trade_review
-
-## Tool Response Rules
-
-Every tool response must include:
-
-- asOf
-- source
-- dataQuality
-- warnings
-
-Scanner outputs must include:
-
-- confidenceScore
-- confidenceCapReason
-- rejectReasons
-
-## Example Tool: get_portfolio_snapshot
-
-Input:
-
-```json
-{}
-```
-
-Output:
-
-```json
-{
-  "asOf": "2026-05-29T09:30:00+05:30",
-  "totalValue": 485995.70,
-  "cash": 35039.75,
-  "assetAllocation": [],
-  "holdings": [],
-  "activeTrades": [],
-  "warnings": []
-}
-```
-
-## Example Tool: validate_trade_setup
-
-Input:
-
-```json
-{
-  "symbol": "MOTHERSON",
-  "side": "BUY",
-  "entry": 143.5,
-  "target": 156,
-  "stopLoss": 137.5,
-  "capital": 16000
-}
-```
-
-Output:
-
-```json
-{
-  "valid": true,
-  "riskReward": 2.08,
-  "suggestedQuantity": 110,
-  "maxRisk": 660,
-  "targetProfit": 1375,
-  "warnings": [],
-  "dataQuality": {
-    "priceFreshness": "RECENT",
-    "symbolVerified": true
-  }
-}
-```
-
-## Forbidden MCP Tools in V1
-
-Do not expose:
-
-- place_order
-- modify_order
-- cancel_order
-- auto_trade
-- auto_trail_stop_loss
-
-Order execution must remain manual.
+An AI consumer must not claim that Finance OS placed or will place an order.

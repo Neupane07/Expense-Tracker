@@ -24,6 +24,7 @@ import { PricesService } from './prices.service';
     DhanMarketDataProviderService,
   ],
   exports: [
+    MarketDataService,
     InstrumentsService,
     PricesService,
     CandlesService,

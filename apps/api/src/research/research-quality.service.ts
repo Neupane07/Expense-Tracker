@@ -135,6 +135,7 @@ export class ResearchQualityService {
     } else if (input.hasFreshEvidence) {
       status = hasUserProvidedEvidence ? 'user-provided' : 'fresh';
     } else {
+      // Manual/user evidence beyond the freshness threshold is stale, not user-provided.
       status = 'stale';
     }
 

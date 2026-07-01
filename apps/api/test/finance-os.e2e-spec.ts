@@ -37,6 +37,12 @@ type ReadinessBody = {
   checks: Array<{ id: string }>;
 };
 
+type ToolCatalogBody = {
+  readOnly: boolean;
+  tools: Array<{ name: string; version: string }>;
+  forbiddenToolNames: string[];
+};
+
 function sessionCookie(userId: string) {
   return `expense_session=${userId}-session-token`;
 }
@@ -94,6 +100,13 @@ describe('Finance OS authenticated boundaries (e2e)', () => {
     },
     portfolioSnapshot: {
       findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+    toolExecutionAudit: {
+      create: jest.fn(),
+      updateMany: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
     },
   };
 
@@ -132,6 +145,75 @@ describe('Finance OS authenticated boundaries (e2e)', () => {
     });
     prisma.brokerPositionSnapshot.findMany.mockResolvedValue([]);
     prisma.portfolioSnapshot.findFirst.mockResolvedValue(null);
+    prisma.portfolioSnapshot.create.mockResolvedValue({
+      id: 'snap-1',
+      snapshotTime: new Date('2026-06-14T00:00:00.000Z'),
+      brokerAccountId: null,
+      totalStockValue: 0,
+      totalEtfValue: 0,
+      totalMfValue: 0,
+      totalCashValue: 0,
+      totalValue: 0,
+      allocation: {},
+      source: {},
+      warnings: [],
+    });
+    prisma.toolExecutionAudit.create.mockImplementation(({ data }) =>
+      Promise.resolve({
+        id: 'audit-1',
+        ...data,
+      }),
+    );
+    prisma.toolExecutionAudit.updateMany.mockResolvedValue({ count: 1 });
+    prisma.toolExecutionAudit.findMany.mockImplementation(
+      ({ where }: { where: { userId: string } }) =>
+        Promise.resolve(
+          where.userId === 'user-a'
+            ? [
+                {
+                  id: 'audit-a',
+                  userId: 'user-a',
+                  toolName: 'get_scanner_readiness',
+                  toolVersion: '1',
+                  status: 'OK',
+                  startedAt: new Date('2026-06-14T00:00:00.000Z'),
+                  completedAt: new Date('2026-06-14T00:00:01.000Z'),
+                  durationMs: 1000,
+                  warningCount: 0,
+                  rejectCount: 0,
+                  errorCode: null,
+                  inputHash: 'hash-a',
+                  inputMeta: { keys: [] },
+                  createdAt: new Date('2026-06-14T00:00:01.000Z'),
+                },
+              ]
+            : [],
+        ),
+    );
+    prisma.toolExecutionAudit.findFirst.mockImplementation(
+      ({ where }: { where: { id: string; userId: string } }) => {
+        if (where.userId === 'user-a' && where.id === 'audit-a') {
+          return Promise.resolve({
+            id: 'audit-a',
+            userId: 'user-a',
+            toolName: 'get_scanner_readiness',
+            toolVersion: '1',
+            status: 'OK',
+            startedAt: new Date('2026-06-14T00:00:00.000Z'),
+            completedAt: new Date('2026-06-14T00:00:01.000Z'),
+            durationMs: 1000,
+            warningCount: 0,
+            rejectCount: 0,
+            errorCode: null,
+            inputHash: 'hash-a',
+            inputMeta: { keys: [] },
+            createdAt: new Date('2026-06-14T00:00:01.000Z'),
+          });
+        }
+
+        return Promise.resolve(null);
+      },
+    );
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -261,5 +343,85 @@ describe('Finance OS authenticated boundaries (e2e)', () => {
       .get('/scanner/readiness?symbols=INFY&universe=symbols')
       .set('Cookie', sessionCookie('user-a'))
       .expect(400);
+  });
+
+  it('lists internal tool catalog for authenticated users', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/tools')
+      .set('Cookie', sessionCookie('user-a'))
+      .expect(200);
+
+    const body = response.body as ToolCatalogBody;
+
+    expect(body.readOnly).toBe(true);
+    expect(body.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'get_scanner_readiness',
+          version: '1',
+        }),
+        expect.objectContaining({
+          name: 'create_manual_super_order_plan',
+          version: '1',
+        }),
+      ]),
+    );
+    expect(body.forbiddenToolNames).toContain('place_order');
+  });
+
+  it('scopes tool audit history to the authenticated user', async () => {
+    const responseA = await request(app.getHttpServer())
+      .get('/tools/audits')
+      .set('Cookie', sessionCookie('user-a'))
+      .expect(200);
+
+    const responseB = await request(app.getHttpServer())
+      .get('/tools/audits')
+      .set('Cookie', sessionCookie('user-b'))
+      .expect(200);
+
+    expect(responseA.body).toHaveLength(1);
+    expect(responseB.body).toEqual([]);
+    expect(JSON.stringify(responseA.body)).not.toContain('apiKey');
+  });
+
+  it('executes get_scanner_readiness through the tool envelope', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/tools/get_scanner_readiness/execute')
+      .set('Cookie', sessionCookie('user-a'))
+      .send({})
+      .expect(201);
+
+    expect(response.body).toMatchObject({
+      tool: 'get_scanner_readiness',
+      version: '1',
+      status: expect.stringMatching(/ok|rejected|unavailable|error/) as string,
+      auditId: 'audit-1',
+      durationMs: expect.any(Number) as number,
+    });
+    expect(JSON.stringify(response.body)).not.toContain('apiSecret');
+  });
+
+  it('rejects forbidden broker write tool names', async () => {
+    await request(app.getHttpServer())
+      .post('/tools/place_order/execute')
+      .set('Cookie', sessionCookie('user-a'))
+      .send({})
+      .expect(404);
+  });
+
+  it('returns rejected tool envelope for invalid execute input', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/tools/validate_trade_setup/execute')
+      .set('Cookie', sessionCookie('user-a'))
+      .send({ symbol: 'INFY' })
+      .expect(201);
+
+    expect(response.body).toMatchObject({
+      tool: 'validate_trade_setup',
+      status: 'rejected',
+      auditId: 'audit-1',
+      rejectReasons: ['INVALID_INPUT'],
+    });
   });
 });

@@ -37,6 +37,20 @@ Deterministic per-symbol rollup:
 
 Default stale threshold: 30 days (`RESEARCH_STALE_DAYS` env override).
 
+Freshness is time-based for all source types, including manual notes. The
+`dataQuality.status` field distinguishes source shape only when evidence is still
+within the threshold:
+
+- `missing` — no stored items
+- `user-provided` — fresh manual/user-source evidence (MANUAL, USER_NOTE, USER_URL)
+- `official` — fresh evidence that includes an official filing source
+- `fresh` — fresh evidence from other non-manual sources
+- `stale` — items exist but the latest evidence date is older than the threshold
+
+Manual evidence older than the threshold is classified as `stale`, not
+`user-provided`. Scanner confidence caps and `STALE_RESEARCH_EVIDENCE` warnings
+apply the same way as for any other stale source.
+
 ## Services
 
 ```text

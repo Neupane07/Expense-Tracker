@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  RequestTimeoutException,
 } from '@nestjs/common';
 import { PortfolioAssetClass } from '../generated/prisma/client';
 import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
@@ -108,7 +109,12 @@ export class SwingScannerService {
     private readonly instrumentVerification: InstrumentVerificationService,
   ) {}
 
-  async runScan(userId: string, input: RunSwingScanInput = {}) {
+  async runScan(
+    userId: string,
+    input: RunSwingScanInput = {},
+    options: { abortSignal?: AbortSignal } = {},
+  ) {
+    this.assertNotAborted(options.abortSignal);
     const universe = await this.resolveUniverse(userId, input);
     const readiness = await this.readiness.getReadiness(userId, {
       symbols: input.symbols,
@@ -135,6 +141,7 @@ export class SwingScannerService {
     }
 
     for (const symbol of universe) {
+      this.assertNotAborted(options.abortSignal);
       try {
         const symbolCandidates = await this.scanSymbol(
           userId,
@@ -147,6 +154,7 @@ export class SwingScannerService {
       }
     }
 
+    this.assertNotAborted(options.abortSignal);
     const run = await this.prisma.swingScanRun.create({
       data: {
         userId,
@@ -157,6 +165,11 @@ export class SwingScannerService {
         warnings: unique(scanWarnings),
       },
     });
+
+    if (options.abortSignal?.aborted) {
+      await this.prisma.swingScanRun.delete({ where: { id: run.id } });
+      throw new RequestTimeoutException('SCAN_ABORTED_TIMEOUT');
+    }
 
     return {
       runId: run.id,
@@ -644,6 +657,12 @@ export class SwingScannerService {
       evidenceCount: input.researchStatus.evidenceCount,
       riskFlags: input.researchStatus.riskFlags,
     };
+  }
+
+  private assertNotAborted(signal?: AbortSignal) {
+    if (signal?.aborted) {
+      throw new RequestTimeoutException('SCAN_ABORTED_TIMEOUT');
+    }
   }
 }
 

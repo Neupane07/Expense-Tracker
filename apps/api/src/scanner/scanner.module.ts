@@ -12,5 +12,6 @@ import { SwingScannerService } from './swing-scanner.service';
   imports: [BrokerModule, MarketDataModule, RiskModule, ResearchModule],
   controllers: [SwingScannerController],
   providers: [ScannerService, SwingScannerService, ScannerReadinessService],
+  exports: [SwingScannerService, ScannerReadinessService],
 })
 export class ScannerModule {}
