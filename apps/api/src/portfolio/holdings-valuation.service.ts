@@ -93,6 +93,7 @@ export class HoldingsValuationService {
     userId: string,
     holdings: T[],
     asOf: Date = new Date(),
+    options: { preferCachedPrices?: boolean } = {},
   ): Promise<HoldingsValuationResult<T>> {
     if (holdings.length === 0) {
       return {
@@ -141,7 +142,7 @@ export class HoldingsValuationService {
     const fetchWarnings: string[] = [];
     let bulkPrices = new Map<string, BulkProviderPrice>();
 
-    if (stalePending.length > 0) {
+    if (stalePending.length > 0 && !options.preferCachedPrices) {
       try {
         bulkPrices = await this.provider.fetchLatestPricesBulk(
           userId,

@@ -8,11 +8,10 @@
 
 ## Portfolio tests
 
-- GET /portfolio/snapshot — response now includes `summary` with
-  `totalInvested`, `totalCurrentValue`, `totalPnl`, `totalPnlPercent`,
-  `dayPnl`, `dayPnlPercent`, and per-bucket `listed`, `mutualFunds`, `cash`
-  aggregates plus `listedSummary` and `priceAsOf`.
-- POST /portfolio/sync/dhan
+- POST /portfolio/sync/dhan — returns `{ sync, snapshot, holdings }` so the UI can
+  reuse freshly valued holdings without an immediate duplicate quote fetch.
+- GET /portfolio/snapshot — returns the latest persisted snapshot without forcing
+  a new live quote fetch on every page load.
 - GET /portfolio/holdings — response is now `{ holdings, summary, priceAsOf, warnings }`.
   Each holding includes `ltp`, `previousClose`, `investedValue`, `currentValue`,
   `pnl`, `pnlPercent`, `dayPnl`, `dayPnlPercent`, and `priceFreshness`
@@ -31,15 +30,19 @@
 
 ## Broker connection tests
 
-Set the API encryption key before starting the server:
+Set the API encryption key and Dhan callback URL before starting the server:
 
 ```bash
 export FINANCE_OS_CREDENTIAL_KEY="replace-with-at-least-32-random-bytes"
+export DHAN_CONNECT_CALLBACK_URL="http://localhost:4000/broker/dhan/connect/callback"
 pnpm dev:api
 ```
 
-Check the current Dhan connection. The response must contain only masked fields
-and booleans:
+In Dhan Web, create an individual API key with redirect URL exactly matching
+`DHAN_CONNECT_CALLBACK_URL`.
+
+Check the current Dhan connection. The response must contain only masked fields,
+booleans, and reconnect metadata:
 
 ```bash
 curl -i \
@@ -47,8 +50,33 @@ curl -i \
   http://localhost:4000/broker/dhan/connection
 ```
 
-Save Dhan credentials. Do not put these values in `.env`; they are encrypted in
-the database by the API:
+Start the supported OAuth connect flow:
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/broker/dhan/connect/start \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "1000000001",
+    "apiKey": "dhan-api-key",
+    "apiSecret": "dhan-api-secret"
+  }'
+```
+
+Open the returned `loginUrl` in a browser. After Dhan login, the callback stores
+the encrypted 24-hour access token and redirects to
+`/settings/broker-connections/dhan?connected=1`.
+
+Renew an active token (Dhan official `RenewToken`; fails once expired):
+
+```bash
+curl -i \
+  -X POST http://localhost:4000/broker/dhan/connect/renew \
+  -H "Cookie: finance_os_session=<session-cookie>"
+```
+
+Legacy manual credential save remains available for migration only:
 
 ```bash
 curl -i \

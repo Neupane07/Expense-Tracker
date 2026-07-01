@@ -156,6 +156,7 @@ registered read-only tools after Tool Tester acceptance. MCP must not:
 Current:
 
 - Dhan read-only broker/account and market-data APIs
+- Dhan individual OAuth connect flow (API key + browser login + token exchange)
 - AMFI NAV text feed
 - manual/user-URL research evidence
 

@@ -214,6 +214,7 @@ type SyncDhanResponse = {
     warnings: string[]
   }
   snapshot: PortfolioSnapshot
+  holdings: HoldingsResponse
 }
 
 type AmfiSyncResponse = {
@@ -457,6 +458,12 @@ export function PortfolioPage() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [syncedSnapshot, setSyncedSnapshot] = useState<PortfolioSnapshot | null>(
+    null,
+  )
+  const [syncedHoldings, setSyncedHoldings] = useState<HoldingsResponse | null>(
+    null,
+  )
   const snapshotQuery = useApiQuery<PortfolioSnapshot>(
     `/portfolio/snapshot?refresh=${refreshKey}`,
   )
@@ -464,6 +471,9 @@ export function PortfolioPage() {
     `/portfolio/holdings?refresh=${refreshKey}`,
   )
   const ordersQuery = useApiQuery<Order[]>(`/portfolio/orders?refresh=${refreshKey}`)
+
+  const snapshotData = syncedSnapshot ?? snapshotQuery.data
+  const holdingsData = syncedHoldings ?? holdingsQuery.data
 
   async function syncDhan() {
     setIsSyncing(true)
@@ -473,6 +483,8 @@ export function PortfolioPage() {
     try {
       const result = await apiPostJson<SyncDhanResponse>("/portfolio/sync/dhan", {})
       const counts = getSyncCounts(result.sync)
+      setSyncedSnapshot(result.snapshot)
+      setSyncedHoldings(result.holdings)
       setSyncMessage(
         `Dhan sync completed. Holdings: ${counts.holdings}, orders: ${counts.orders}.`,
       )
@@ -519,8 +531,16 @@ export function PortfolioPage() {
 
         <TabsContent value="holdings" className="space-y-5">
           <HoldingsSection
-            snapshotQuery={snapshotQuery}
-            holdingsQuery={holdingsQuery}
+            snapshotQuery={{
+              ...snapshotQuery,
+              data: snapshotData,
+              error: syncedSnapshot ? null : snapshotQuery.error,
+            }}
+            holdingsQuery={{
+              ...holdingsQuery,
+              data: holdingsData,
+              error: syncedHoldings ? null : holdingsQuery.error,
+            }}
             ordersQuery={ordersQuery}
           />
         </TabsContent>

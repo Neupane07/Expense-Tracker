@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { KeyRound, ShieldCheck, Trash2 } from "lucide-react"
+import { ExternalLink, KeyRound, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
+import { useSearchParams } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +20,8 @@ type DhanConnection = {
   clientIdMasked: string | null
   apiKeyMasked: string | null
   accessTokenExpiresAt: string | null
+  accessTokenExpired?: boolean
+  reconnectRequired?: boolean
   lastValidatedAt: string | null
   lastSyncAt: string | null
 }
@@ -27,49 +30,77 @@ type FormState = {
   apiKey: string
   apiSecret: string
   clientId: string
-  accessToken: string
-  accessTokenExpiresAt: string
+}
+
+type StartConnectResponse = {
+  loginUrl: string
+  callbackUrl: string
+  expiresAt: string
 }
 
 const initialForm: FormState = {
   apiKey: "",
   apiSecret: "",
   clientId: "",
-  accessToken: "",
-  accessTokenExpiresAt: "",
 }
 
 export function DhanConnectionPage() {
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [searchParams] = useSearchParams()
+  const [refreshKey, setRefreshKey] = useState(() =>
+    searchParams.get("connected") === "1" ? 1 : 0,
+  )
   const [form, setForm] = useState<FormState>(initialForm)
   const [message, setMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const callbackMessage =
+    searchParams.get("connected") === "1"
+      ? "Dhan connected successfully. Access token saved securely."
+      : message
+  const callbackError =
+    searchParams.get("error") === "connect_failed"
+      ? "Dhan login did not complete. Check your API key redirect URL and try again."
+      : actionError
   const [isSaving, setIsSaving] = useState(false)
   const { data, error, isLoading } = useApiQuery<DhanConnection>(
     `/broker/dhan/connection?refresh=${refreshKey}`,
   )
 
-  async function saveCredentials() {
+  async function connectWithDhan() {
     setIsSaving(true)
     setActionError(null)
     setMessage(null)
 
     try {
-      await apiPostJson("/broker/dhan/credentials", {
-        apiKey: form.apiKey,
-        apiSecret: form.apiSecret,
-        clientId: form.clientId,
-        accessToken: form.accessToken || null,
-        accessTokenExpiresAt: form.accessTokenExpiresAt
-          ? new Date(form.accessTokenExpiresAt).toISOString()
-          : null,
-      })
+      const result = await apiPostJson<StartConnectResponse>(
+        "/broker/dhan/connect/start",
+        form,
+      )
       setForm(initialForm)
-      setMessage("Dhan credentials saved securely.")
+      setMessage(
+        `Opening Dhan login. Ensure your Dhan API redirect URL is ${result.callbackUrl}.`,
+      )
+      window.location.assign(result.loginUrl)
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Unable to start Dhan connect",
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function renewToken() {
+    setIsSaving(true)
+    setActionError(null)
+    setMessage(null)
+
+    try {
+      await apiPostJson("/broker/dhan/connect/renew", {})
+      setMessage("Dhan access token renewed for another 24 hours.")
       setRefreshKey((value) => value + 1)
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : "Unable to save credentials",
+        error instanceof Error ? error.message : "Unable to renew Dhan token",
       )
     } finally {
       setIsSaving(false)
@@ -121,6 +152,8 @@ export function DhanConnectionPage() {
     return <ErrorState message={error ?? "Broker connection is unavailable"} />
   }
 
+  const tokenStatus = getTokenStatus(data)
+
   return (
     <div className="max-w-5xl space-y-5">
       <div>
@@ -135,20 +168,17 @@ export function DhanConnectionPage() {
           <div>
             <CardTitle>Connection Status</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Credentials are encrypted by the API and never shown after saving.
+              Read-only OAuth connection using Dhan API key and browser login.
             </p>
           </div>
-          <Badge variant={data.connected ? "default" : "secondary"}>
-            {data.status}
+          <Badge variant={data.connected && !data.reconnectRequired ? "default" : "secondary"}>
+            {tokenStatus.label}
           </Badge>
         </CardHeader>
         <CardContent className="grid gap-4 text-sm md:grid-cols-3">
           <StatusItem label="Client ID" value={data.clientIdMasked ?? "Not saved"} />
           <StatusItem label="API key" value={data.apiKeyMasked ?? "Not saved"} />
-          <StatusItem
-            label="Access token"
-            value={data.hasAccessToken ? "Saved" : "Not saved"}
-          />
+          <StatusItem label="Access token" value={tokenStatus.tokenLabel} />
           <StatusItem
             label="Token expiry"
             value={formatDateTime(data.accessTokenExpiresAt)}
@@ -163,9 +193,14 @@ export function DhanConnectionPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Secure Credentials</CardTitle>
+          <CardTitle>Connect with Dhan</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          <p className="text-sm text-muted-foreground">
+            Generate an individual API key in Dhan Web, set the redirect URL to
+            your API callback, then connect here. Finance OS stores only encrypted
+            API credentials and the issued 24-hour access token.
+          </p>
           <div className="grid gap-4 md:grid-cols-2">
             <CredentialInput
               id="clientId"
@@ -188,43 +223,31 @@ export function DhanConnectionPage() {
                 setForm((state) => ({ ...state, apiSecret: value }))
               }
             />
-            <CredentialInput
-              id="accessToken"
-              label="Access token"
-              type="password"
-              value={form.accessToken}
-              onChange={(value) =>
-                setForm((state) => ({ ...state, accessToken: value }))
-              }
-            />
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="accessTokenExpiresAt">Access token expiry</Label>
-              <Input
-                id="accessTokenExpiresAt"
-                type="datetime-local"
-                value={form.accessTokenExpiresAt}
-                onChange={(event) =>
-                  setForm((state) => ({
-                    ...state,
-                    accessTokenExpiresAt: event.target.value,
-                  }))
-                }
-              />
-            </div>
           </div>
 
-          {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-          {actionError ? <ErrorState message={actionError} /> : null}
+          {callbackMessage ? <p className="text-sm text-muted-foreground">{callbackMessage}</p> : null}
+          {callbackError ? <ErrorState message={callbackError} /> : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={saveCredentials} disabled={isSaving}>
-              <KeyRound className="size-4" aria-hidden="true" />
-              {isSaving ? "Saving" : "Save encrypted"}
+            <Button
+              onClick={connectWithDhan}
+              disabled={isSaving || !form.apiKey || !form.apiSecret || !form.clientId}
+            >
+              <ExternalLink className="size-4" aria-hidden="true" />
+              {isSaving ? "Starting" : "Connect with Dhan"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={renewToken}
+              disabled={isSaving || !data.hasAccessToken || data.reconnectRequired}
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
+              Renew token
             </Button>
             <Button
               variant="outline"
               onClick={validateConnection}
-              disabled={isSaving || !data.connected}
+              disabled={isSaving || !data.connected || data.reconnectRequired}
             >
               <ShieldCheck className="size-4" aria-hidden="true" />
               Validate
@@ -240,8 +263,46 @@ export function DhanConnectionPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Legacy manual token entry</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            Manual access-token paste is no longer the primary flow. Use Dhan OAuth
+            above. If you must paste a short-lived token from Dhan Web, contact support
+            or use the API credentials endpoint during migration only.
+          </p>
+          <div className="flex items-center gap-2 text-xs">
+            <KeyRound className="size-4" aria-hidden="true" />
+            Read-only broker access only. No order placement is available in Finance OS.
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
+}
+
+function getTokenStatus(data: DhanConnection) {
+  if (!data.hasAccessToken) {
+    return {
+      label: data.connected ? "TOKEN_MISSING" : "DISCONNECTED",
+      tokenLabel: "Not connected",
+    }
+  }
+
+  if (data.accessTokenExpired || data.reconnectRequired) {
+    return {
+      label: "RECONNECT_REQUIRED",
+      tokenLabel: "Expired — reconnect required",
+    }
+  }
+
+  return {
+    label: data.status,
+    tokenLabel: "Saved",
+  }
 }
 
 function StatusItem({ label, value }: { label: string; value: string }) {

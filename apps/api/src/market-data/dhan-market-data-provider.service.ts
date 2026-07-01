@@ -37,11 +37,9 @@ export class DhanMarketDataProviderService {
   async fetchLatestPrice(userId: string, instrument: MarketDataInstrument) {
     const securityId = this.requireSecurityId(instrument);
     const exchangeSegment = this.toExchangeSegment(instrument.exchange);
-    const response = await this.dhanClient.getMarketQuote(
-      userId,
-      exchangeSegment,
-      securityId,
-    );
+    const response = await this.dhanClient.getMarketOhlc(userId, {
+      [exchangeSegment]: [securityId],
+    });
     const rows = response.data?.[exchangeSegment] ?? {};
     const quote = rows[securityId] ?? rows[String(Number(securityId))];
 
@@ -87,15 +85,18 @@ export class DhanMarketDataProviderService {
     }
 
     const errors: string[] = [];
+    const requestBody = Object.fromEntries(
+      Array.from(idsBySegment.entries()).map(([segment, idSet]) => [
+        segment,
+        Array.from(idSet),
+      ]),
+    );
 
-    for (const [segment, idSet] of idsBySegment) {
-      const ids = Array.from(idSet);
+    try {
+      const response = await this.dhanClient.getMarketOhlc(userId, requestBody);
+      const timestamp = new Date();
 
-      try {
-        const response = await this.dhanClient.getMarketQuotes(userId, {
-          [segment]: ids,
-        });
-        const timestamp = new Date();
+      for (const [segment, ids] of idsBySegment) {
         const rows = response.data?.[segment] ?? {};
 
         for (const securityId of ids) {
@@ -119,10 +120,10 @@ export class DhanMarketDataProviderService {
             rawPayload: quote,
           });
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        errors.push(`${segment}: ${message}`);
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(message);
     }
 
     if (result.size === 0 && errors.length > 0) {

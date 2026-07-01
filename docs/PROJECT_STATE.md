@@ -44,6 +44,9 @@ scanner universe expansion.
 ### Portfolio and broker
 
 - encrypted Dhan credentials with masked API responses
+- Dhan OAuth connect flow using official API key + browser login + token exchange
+- 24-hour access token storage with reconnect/renew status in the UI
+- server-side Dhan quote throttling and OHLC-based holdings valuation
 - explicit read-only Dhan sync for holdings, positions, orders, trades, and funds
 - persisted normalized snapshots plus raw broker payloads
 - same-day sell reconciliation

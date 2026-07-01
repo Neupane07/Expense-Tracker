@@ -21,6 +21,70 @@ export class PortfolioSnapshotService {
   ) {}
 
   async createSnapshotFromLatest(userId: string, syncRunId?: string) {
+    const built = await this.buildSnapshot(userId, syncRunId);
+    const snapshot = await this.prisma.portfolioSnapshot.create({
+      data: {
+        userId,
+        brokerAccountId: built.brokerAccountId,
+        snapshotTime: built.snapshotTime,
+        totalStockValue: built.allocation.stockValue,
+        totalEtfValue: built.allocation.etfValue,
+        totalMfValue: built.allocation.mutualFundValue,
+        totalCashValue: built.allocation.cashValue,
+        totalValue: built.allocation.totalValue,
+        allocation: this.toJson(built.allocation),
+        source: this.toJson(built.source),
+        warnings: built.warnings,
+      },
+    });
+
+    return {
+      id: snapshot.id,
+      ...built,
+    };
+  }
+
+  async getLatestSnapshot(userId: string) {
+    const snapshot = await this.prisma.portfolioSnapshot.findFirst({
+      where: { userId },
+      orderBy: { snapshotTime: 'desc' },
+    });
+
+    if (!snapshot) {
+      return this.createSnapshotFromLatest(userId);
+    }
+
+    const source = this.readSnapshotSource(snapshot.source);
+    const allocation = this.readAllocation(snapshot.allocation);
+    const mutualFunds = await this.mutualFundsService.getValuations(userId);
+
+    return {
+      id: snapshot.id,
+      snapshotTime: snapshot.snapshotTime,
+      brokerAccountId: snapshot.brokerAccountId,
+      allocation,
+      summary:
+        source.summary ??
+        this.buildSummary({
+          listed: source.listedSummary ?? emptyListedSummary(),
+          mutualFunds,
+          cashValue: allocation.cashValue,
+        }),
+      listedSummary: source.listedSummary ?? emptyListedSummary(),
+      priceAsOf: source.priceAsOf ? new Date(source.priceAsOf) : null,
+      mutualFunds,
+      warnings: [...snapshot.warnings, ...mutualFunds.warnings],
+      source: {
+        brokerProvider: source.brokerProvider ?? BrokerProvider.DHAN,
+        syncRunId: source.syncRunId ?? null,
+        holdingCount: source.holdingCount ?? 0,
+        fundSnapshotId: source.fundSnapshotId ?? null,
+        mutualFundHoldingCount: mutualFunds.holdings.length,
+      },
+    };
+  }
+
+  private async buildSnapshot(userId: string, syncRunId?: string) {
     const { holdings, excludedCount } =
       await this.brokerHoldingsQuery.findReconciledHoldings(userId, syncRunId);
     const fund = await this.findFund(userId, syncRunId);
@@ -61,53 +125,66 @@ export class PortfolioSnapshotService {
       brokerAccountIds.size === 1
         ? (Array.from(brokerAccountIds)[0] as string)
         : null;
+    const snapshotTime = new Date();
     const warnings = [
       ...this.buildWarnings(holdings.length, fund !== null, excludedCount),
       ...valuation.warnings,
       ...mutualFunds.warnings,
     ];
-    const snapshot = await this.prisma.portfolioSnapshot.create({
-      data: {
-        userId,
-        brokerAccountId,
-        snapshotTime: new Date(),
-        totalStockValue: allocation.stockValue,
-        totalEtfValue: allocation.etfValue,
-        totalMfValue: allocation.mutualFundValue,
-        totalCashValue: allocation.cashValue,
-        totalValue: allocation.totalValue,
-        allocation: this.toJson(allocation),
-        source: this.toJson({
-          brokerProvider: BrokerProvider.DHAN,
-          syncRunId: syncRunId ?? null,
-          holdingCount: holdings.length,
-          fundSnapshotId: fund?.id ?? null,
-          mutualFundHoldingCount: mutualFunds.holdings.length,
-          mutualFundNavDates: mutualFunds.holdings
-            .map((holding) => holding.navDate?.toISOString().slice(0, 10))
-            .filter(Boolean),
-        }),
-        warnings,
-      },
-    });
+    const source = {
+      brokerProvider: BrokerProvider.DHAN,
+      syncRunId: syncRunId ?? null,
+      holdingCount: holdings.length,
+      fundSnapshotId: fund?.id ?? null,
+      mutualFundHoldingCount: mutualFunds.holdings.length,
+      mutualFundNavDates: mutualFunds.holdings
+        .map((holding) => holding.navDate?.toISOString().slice(0, 10))
+        .filter(Boolean),
+      summary,
+      listedSummary: valuation.summary,
+      priceAsOf: valuation.priceAsOf?.toISOString() ?? null,
+    };
 
     return {
-      id: snapshot.id,
-      snapshotTime: snapshot.snapshotTime,
-      brokerAccountId: snapshot.brokerAccountId,
+      snapshotTime,
+      brokerAccountId,
       allocation,
       summary,
       listedSummary: valuation.summary,
       priceAsOf: valuation.priceAsOf,
       mutualFunds,
       warnings,
-      source: {
-        brokerProvider: BrokerProvider.DHAN,
-        syncRunId: syncRunId ?? null,
-        holdingCount: holdings.length,
-        fundSnapshotId: fund?.id ?? null,
-        mutualFundHoldingCount: mutualFunds.holdings.length,
-      },
+      source,
+    };
+  }
+
+  private readAllocation(value: unknown) {
+    return value as ReturnType<
+      AllocationService['calculateStockEtfCashAllocation']
+    >;
+  }
+
+  private readSnapshotSource(value: unknown) {
+    const source = (value ?? {}) as Record<string, unknown>;
+    return {
+      brokerProvider:
+        typeof source.brokerProvider === 'string'
+          ? source.brokerProvider
+          : null,
+      syncRunId: typeof source.syncRunId === 'string' ? source.syncRunId : null,
+      holdingCount:
+        typeof source.holdingCount === 'number' ? source.holdingCount : 0,
+      fundSnapshotId:
+        typeof source.fundSnapshotId === 'string'
+          ? source.fundSnapshotId
+          : null,
+      summary: source.summary as
+        | ReturnType<PortfolioSnapshotService['buildSummary']>
+        | undefined,
+      listedSummary: source.listedSummary as
+        | import('./holdings-valuation.service').HoldingsValuationSummary
+        | undefined,
+      priceAsOf: typeof source.priceAsOf === 'string' ? source.priceAsOf : null,
     };
   }
 
@@ -223,6 +300,24 @@ export class PortfolioSnapshotService {
   private toJson(value: unknown): Prisma.InputJsonValue {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
+}
+
+function emptyListedSummary(): import('./holdings-valuation.service').HoldingsValuationSummary {
+  return {
+    holdingCount: 0,
+    pricedCount: 0,
+    fallbackCount: 0,
+    invested: 0,
+    currentValue: 0,
+    pnl: 0,
+    pnlPercent: null,
+    dayPnl: null,
+    dayPnlPercent: null,
+    stockInvested: 0,
+    stockCurrentValue: 0,
+    etfInvested: 0,
+    etfCurrentValue: 0,
+  };
 }
 
 function roundMoney(value: number) {

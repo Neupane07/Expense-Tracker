@@ -22,14 +22,20 @@ type DhanCredentialType =
   | 'CLIENT_ID'
   | 'ACCESS_TOKEN';
 
-const dhanCredentialsSchema = z.object({
+const dhanAppCredentialsSchema = z.object({
   apiKey: z.string().trim().min(1, 'apiKey is required').max(512),
   apiSecret: z.string().trim().min(1, 'apiSecret is required').max(1024),
   clientId: z.string().trim().min(1, 'clientId is required').max(128),
+});
+
+const dhanCredentialsSchema = dhanAppCredentialsSchema.extend({
   accessToken: z.string().trim().min(1).max(4096).optional().nullable(),
   accessTokenExpiresAt: z.string().datetime().optional().nullable(),
 });
 
+export type SaveDhanAppCredentialsInput = z.input<
+  typeof dhanAppCredentialsSchema
+>;
 export type SaveDhanCredentialsInput = z.input<typeof dhanCredentialsSchema>;
 
 export type DhanStoredCredentials = {
@@ -84,6 +90,8 @@ export class BrokerCredentialsService implements OnModuleInit {
         clientIdMasked: null,
         apiKeyMasked: null,
         accessTokenExpiresAt: null,
+        accessTokenExpired: false,
+        reconnectRequired: true,
         lastValidatedAt: null,
         lastSyncAt: null,
         metadata: null,
@@ -106,10 +114,134 @@ export class BrokerCredentialsService implements OnModuleInit {
       clientIdMasked: connection.clientIdMasked,
       apiKeyMasked: connection.apiKeyMasked,
       accessTokenExpiresAt: connection.accessTokenExpiresAt,
+      accessTokenExpired: this.isAccessTokenExpired(
+        connection.accessTokenExpiresAt,
+      ),
+      reconnectRequired: this.isReconnectRequired(connection),
       lastValidatedAt: connection.lastValidatedAt,
       lastSyncAt: connection.lastSyncAt,
       metadata: connection.metadata,
     };
+  }
+
+  async saveDhanAppCredentials(
+    userId: string,
+    input: SaveDhanAppCredentialsInput,
+  ) {
+    const parsed = dhanAppCredentialsSchema.safeParse(input);
+
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0]?.message);
+    }
+
+    const data = parsed.data;
+    const connection = await this.prisma.brokerConnection.upsert({
+      where: {
+        userId_provider: {
+          userId,
+          provider: BrokerProvider.DHAN,
+        },
+      },
+      create: {
+        userId,
+        provider: BrokerProvider.DHAN,
+        brokerName: 'Dhan',
+        displayName: `Dhan ${this.maskSecret(data.clientId)}`,
+        clientIdMasked: this.maskSecret(data.clientId),
+        apiKeyMasked: this.maskSecret(data.apiKey),
+        metadata: {
+          readOnly: true,
+          credentialVersion: 'v2',
+          authFlow: 'oauth',
+        },
+        status: 'TOKEN_MISSING',
+      },
+      update: {
+        brokerName: 'Dhan',
+        displayName: `Dhan ${this.maskSecret(data.clientId)}`,
+        clientIdMasked: this.maskSecret(data.clientId),
+        apiKeyMasked: this.maskSecret(data.apiKey),
+        metadata: {
+          readOnly: true,
+          credentialVersion: 'v2',
+          authFlow: 'oauth',
+        },
+        status: 'TOKEN_MISSING',
+      },
+    });
+
+    await this.upsertCredential(connection.id, userId, 'API_KEY', data.apiKey);
+    await this.upsertCredential(
+      connection.id,
+      userId,
+      'API_SECRET',
+      data.apiSecret,
+    );
+    await this.upsertCredential(
+      connection.id,
+      userId,
+      'CLIENT_ID',
+      data.clientId,
+    );
+
+    return this.getDhanConnection(userId);
+  }
+
+  async saveDhanAccessToken(
+    userId: string,
+    input: {
+      accessToken: string;
+      accessTokenExpiresAt: Date;
+      clientId?: string;
+    },
+  ) {
+    const connection = await this.prisma.brokerConnection.findUnique({
+      where: {
+        userId_provider: {
+          userId,
+          provider: BrokerProvider.DHAN,
+        },
+      },
+    });
+
+    if (!connection) {
+      throw new BadRequestException('Dhan credentials are not configured.');
+    }
+
+    await this.prisma.brokerConnection.update({
+      where: { id: connection.id },
+      data: {
+        status: 'CONFIGURED',
+        accessTokenExpiresAt: input.accessTokenExpiresAt,
+        clientIdMasked: input.clientId
+          ? this.maskSecret(input.clientId)
+          : connection.clientIdMasked,
+        metadata: {
+          readOnly: true,
+          credentialVersion: 'v2',
+          authFlow: 'oauth',
+          lastTokenIssuedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    if (input.clientId) {
+      await this.upsertCredential(
+        connection.id,
+        userId,
+        'CLIENT_ID',
+        input.clientId,
+      );
+    }
+
+    await this.upsertCredential(
+      connection.id,
+      userId,
+      'ACCESS_TOKEN',
+      input.accessToken,
+    );
+
+    return this.getDhanConnection(userId);
   }
 
   async saveDhanCredentials(userId: string, input: SaveDhanCredentialsInput) {
@@ -356,5 +488,34 @@ export class BrokerCredentialsService implements OnModuleInit {
     const normalized = value.trim();
     const suffix = normalized.slice(-4);
     return suffix ? `****${suffix}` : '****';
+  }
+
+  private isAccessTokenExpired(expiresAt: Date | null) {
+    if (!expiresAt) {
+      return false;
+    }
+
+    return expiresAt.getTime() <= Date.now();
+  }
+
+  private isReconnectRequired(connection: {
+    status: string;
+    accessTokenExpiresAt: Date | null;
+    credentials?: Array<{ credentialType: string }>;
+  }) {
+    const credentialTypes = new Set(
+      connection.credentials?.map((credential) => credential.credentialType) ??
+        [],
+    );
+
+    if (!credentialTypes.has('ACCESS_TOKEN')) {
+      return true;
+    }
+
+    if (connection.status === 'TOKEN_MISSING') {
+      return true;
+    }
+
+    return this.isAccessTokenExpired(connection.accessTokenExpiresAt);
   }
 }
