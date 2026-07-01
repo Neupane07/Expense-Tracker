@@ -26,12 +26,12 @@ Possible later additions:
 ```text
 apps/
   worker/              scheduled provider sync, only when request-driven sync is insufficient
-  mcp-server/          thin read-only transport adapter
-packages/
-  tool-contracts/      only if API and MCP require a shared package boundary
+  mcp-server/          only if MCP must run as a separate process for deployment isolation
 ```
 
-Do not create these merely to match a diagram.
+Phase 11 placed MCP inside `apps/api/src/mcp` because the registry and executor
+are in-process NestJS providers. Extract to `apps/mcp-server` only when a
+deployment or security boundary requires a separate process.
 
 ## Current Module Boundaries
 
@@ -119,9 +119,9 @@ should unify terminology and readiness reporting.
 Phase 9 implements the internal tool layer as a NestJS `internal-tools` module:
 
 ```text
-Tool Tester HTTP/UI ----+        (Phase 10 — not built)
+Tool Tester HTTP/UI ----+
                        |
-Future MCP adapter -----+-> InternalToolsController
+MCP adapter (Phase 11) -+-> InternalToolsController / McpToolBridgeService
                               -> ToolRegistryService
                               -> ToolExecutorService
                               -> ToolAuditService + ToolRedactionService
@@ -142,8 +142,10 @@ risk/reward itself.
 
 ## MCP Boundary
 
-MCP is transport, not domain architecture. It may expose an approved subset of
-registered read-only tools after Tool Tester acceptance. MCP must not:
+MCP is transport, not domain architecture. Phase 11 implements it as
+`apps/api/src/mcp`: Streamable HTTP on `POST /mcp`, bearer auth via
+`McpAccessToken`, and `McpToolBridgeService` calling the same
+`ToolExecutorService` used by `/tools`. MCP must not:
 
 - query Prisma directly
 - copy scanner/risk calculations

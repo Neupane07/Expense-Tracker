@@ -15,6 +15,7 @@ import { RulesModule } from './rules/rules.module';
 import { ScannerModule } from './scanner/scanner.module';
 import { TradeJournalModule } from './trade-journal/trade-journal.module';
 import { InternalToolsModule } from './internal-tools/internal-tools.module';
+import { McpModule } from './mcp/mcp.module';
 import { TransactionsModule } from './transactions/transactions.module';
 
 @Module({
@@ -38,6 +39,7 @@ import { TransactionsModule } from './transactions/transactions.module';
     TradeJournalModule,
     ResearchModule,
     InternalToolsModule,
+    McpModule,
   ],
 })
 export class AppModule {}

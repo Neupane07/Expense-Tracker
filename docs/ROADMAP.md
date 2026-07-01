@@ -86,21 +86,22 @@ Tester UI smoke) is completed against live app state.
 
 ## Phase 11: Read-Only MCP Adapter
 
-Status: Planned after Tool Tester acceptance
+Status: Complete
 
 Goal: expose stable internal tools to approved AI assistants.
 
 Scope:
 
-- separate MCP transport package/app only if deployment requires it
-- strong authentication, least privilege, rate limits, timeout limits, audit ID
-- thin mapping to the internal registry
-- read-only tools only
+- isolated `mcp` module inside `apps/api` (no separate deployable until needed)
+- MCP Streamable HTTP transport on `POST /mcp`
+- revocable per-user bearer tokens (`McpAccessToken`)
+- thin bridge to `ToolExecutorService` / `ToolRegistryService`
+- read-only allowlisted tools only
 
 Exit gate:
 
-- MCP and Tool Tester return equivalent contract results
-- security review confirms no broker secrets, session cookies, or write methods
+- MCP and Tool Tester return equivalent contract results through the shared executor
+- security tests confirm no broker secrets, session cookies, or write methods
 - forbidden tool names and broker write paths have negative tests
 
 ## Phase 12: Verified Data Breadth

@@ -86,6 +86,7 @@ model User {
   researchItems           ResearchItem[]
   researchSnapshots       ResearchSnapshot[]
   toolExecutionAudits     ToolExecutionAudit[]
+  mcpAccessTokens         McpAccessToken[]
   invitationsCreated      Invitation[]             @relation("InvitationCreator")
   invitationAccepted      Invitation?              @relation("InvitationAccepted")
   createdAt               DateTime                 @default(now())
@@ -803,4 +804,22 @@ model ToolExecutionAudit {
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, toolName, createdAt(sort: Desc)])
   @@index([createdAt])
+}
+
+/// Revocable bearer credentials for MCP clients. Maps one token to one user.
+model McpAccessToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String?
+  tokenHash   String    @unique
+  tokenPrefix String
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([revokedAt])
+  @@index([expiresAt])
 }

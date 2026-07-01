@@ -36,6 +36,8 @@ GOOGLE_CALLBACK_URL=https://api.expense.hbkbimal.xyz/auth/google/callback
 INITIAL_ADMIN_EMAIL=allowed.admin@example.com
 AUTH_COOKIE_SECRET=replace_with_at_least_32_random_bytes
 SESSION_MAX_AGE_DAYS=30
+MCP_ENABLED=false
+MCP_RATE_LIMIT_PER_MINUTE=60
 EOF
 chmod 600 /opt/apps/expense/.env
 ```
@@ -57,6 +59,17 @@ Authorized redirect URI:      https://api.expense.hbkbimal.xyz/auth/google/callb
 Only a verified Google identity matching `INITIAL_ADMIN_EMAIL` or an unused
 administrator-issued invitation may create a session. Sessions are persisted
 by the API and delivered using Secure HttpOnly cookies.
+
+Optional MCP (Phase 11): set `MCP_ENABLED=true` in `.env` and issue per-user
+bearer tokens after the user has signed in at least once:
+
+```bash
+docker compose run --rm api pnpm --dir apps/api mcp:issue-token -- --userEmail allowed.admin@example.com --label production-mcp
+```
+
+MCP clients call `POST https://api.expense.hbkbimal.xyz/mcp` with
+`Authorization: Bearer <token>`. Do not forward browser session cookies to MCP
+clients.
 
 ## GHCR Access
 
