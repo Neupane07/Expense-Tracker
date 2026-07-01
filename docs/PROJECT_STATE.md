@@ -5,8 +5,9 @@
 Repository inspection date: 2026-07-01
 
 Phase 8 current-state hardening is complete. Phase 9 internal read-only tools
-are complete on the backend. Phase 10 Tool Tester UI is implemented in the web
-app on authenticated `/tools`.
+are complete on the backend. Phase 10 Tool Tester UI is implemented at
+authenticated `/tools`, but the phase acceptance gate remains open until a
+manual browser pass exercises all eight registry tools end to end.
 
 ## Executive Summary
 
@@ -17,11 +18,12 @@ manual research foundations with browser pages and unit/e2e tests.
 
 The canonical internal read-only tool registry is implemented in the API with
 versioned schemas, execution audit persistence, and eight initial tools. It is
-callable over authenticated `/tools` endpoints and exercised through the browser
-Tool Tester UI.
+callable over authenticated `/tools` endpoints. A browser Tool Tester UI at
+`/tools` calls the same registry path; manual acceptance of all eight tools is
+still pending.
 
-The largest remaining architectural gap for AI-facing workflows is the
-read-only MCP adapter (Phase 11).
+Phase 11 (read-only MCP adapter) should not start until Phase 10 acceptance is
+recorded.
 Important domain gaps also remain in instrument-master coverage, corporate-action
 ingestion, automated research sources, market regime/sector breadth, and broad
 scanner universe expansion.
@@ -80,7 +82,7 @@ scanner universe expansion.
   Super Order plan formatting (no broker calls)
 - authenticated `/tools` catalog, schema, execute, and audit endpoints
 
-### Tool Tester UI (Phase 10)
+### Tool Tester UI (Phase 10 — code)
 
 - authenticated `/tools` route in Finance OS navigation
 - tool catalog with name, version, description, and read-only badge
@@ -95,11 +97,19 @@ scanner universe expansion.
 
 ## Partial
 
+### Tool Tester acceptance (Phase 10)
+
+- Browser UI, routing, nav, tests, and build are in place (`/tools`).
+- **Acceptance gate open:** an authenticated user must manually run all eight
+  registered tools through `/tools` in a live web session and confirm envelope
+  shape, error paths, redacted audits, and disclaimers (see `docs/API_TESTING.md`).
+- Phase 10 must not be marked complete in roadmap/state docs until that pass is
+  recorded.
+
 ### Internal tools (Phase 9 backend)
 
 - Backend registry, executor, audit persistence, and eight tool handlers are
   complete and covered by unit/e2e tests.
-- Browser Tool Tester (Phase 10) is the acceptance harness for these contracts.
 
 ### Instrument and market-data foundation
 
@@ -162,6 +172,7 @@ scanner universe expansion.
 
 ## Missing
 
+- Tool Tester manual acceptance pass (Phase 10 exit gate)
 - read-only MCP server/adapter (Phase 11)
 - instrument-master and corporate-action ingestion pipelines
 - official/licensed filing and news ingestion
@@ -263,19 +274,20 @@ Remaining high-value gaps:
 
 - broader authenticated API e2e coverage across portfolio/market-data/research
 - controller/DTO validation contracts
-- Tool Tester UI integration tests (Phase 10) — implemented in `apps/web`
+- Tool Tester UI Vitest coverage — in `apps/web`; manual `/tools` acceptance
+  pass still required for Phase 10 closure
 - deployment/security tests for MCP only after it exists
 
 ## Immediate Recommendation
 
-Stabilize internal-tool contracts on the backend until tests and docs agree.
-Phase 10 Tool Tester UI is complete. Next execute Phase 11 in `docs/ROADMAP.md`:
-build the read-only MCP adapter only after Tool Tester acceptance.
+Complete the Phase 10 manual acceptance checklist in `docs/API_TESTING.md`
+(exercise all eight tools through `/tools` in a signed-in browser session).
+Only then mark Phase 10 complete and start Phase 11 (read-only MCP adapter).
 
 Recommended order:
 
 ```text
-Tool Tester UI (done) -> MCP adapter -> provider/data breadth
+Tool Tester acceptance (open) -> MCP adapter -> provider/data breadth
 ```
 
 ## Non-Negotiable Boundaries

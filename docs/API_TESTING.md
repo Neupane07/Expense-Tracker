@@ -427,6 +427,39 @@ Tool checks should show:
 - audit records contain metadata only (no full financial output payload)
 - `validate_trade_setup` and `POST /risk/validate-trade` agree for the same input
 
+## Tool Tester UI acceptance (Phase 10 exit gate)
+
+Record this checklist in the PR or session notes before marking Phase 10 complete
+in `docs/ROADMAP.md` and `docs/PROJECT_STATE.md`.
+
+Prerequisites: `docker compose up -d`, `pnpm dev:api`, `pnpm dev:web`, signed-in
+session.
+
+1. Open `/tools` from Finance OS navigation while authenticated.
+2. Confirm catalog lists all eight tools with version, description, and read-only badge.
+3. Run each tool through the UI (not direct domain APIs):
+   - `get_portfolio_snapshot` — `{}`
+   - `get_market_data_status` — `{}` or `{"symbols":["INFY"]}`
+   - `get_scanner_readiness` — `{}`
+   - `scan_swing_candidates` — `{}`
+   - `validate_trade_setup` — starter trade JSON (expect ok or rejected envelope)
+   - `get_stock_deep_dive` — `{"symbol":"INFY"}`
+   - `get_research_snapshot` — `{"symbol":"INFY"}`
+   - `create_manual_super_order_plan` — starter trade JSON; confirm **Manual draft only** banner
+4. For at least one run, verify structured panel shows status, data, dataQuality,
+   warnings, rejectReasons (if any), asOf, durationMs, auditId, and raw JSON tab.
+5. Trigger invalid JSON in the editor — Run disabled with syntax error shown.
+6. Trigger server validation error (e.g. incomplete `validate_trade_setup` input) —
+   rejected envelope with `INVALID_INPUT` and issue list.
+7. Confirm audit history updates with redacted metadata only (no secrets).
+8. Confirm DevTools Application tab shows no tool input/output in localStorage or
+   sessionStorage after runs.
+9. Spot-check `/dashboard`, `/portfolio`, `/scanner`, `/trade-journal`, `/research`
+   still load.
+
+Optional cross-check: same tool + input via `curl POST /tools/:name/execute` should
+return the same envelope shape as the UI run.
+
 ## Trade journal tests
 
 List journal entries:
