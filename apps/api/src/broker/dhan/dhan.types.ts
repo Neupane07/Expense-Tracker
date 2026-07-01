@@ -95,7 +95,7 @@ export type DhanCredentials = {
   baseUrl: string;
 };
 
-export type DhanQuoteRow = {
+export type DhanMarketRow = {
   last_price?: number;
   volume?: number;
   ohlc?: {
@@ -106,8 +106,27 @@ export type DhanQuoteRow = {
   };
 };
 
-export type DhanQuoteResponse = {
-  data?: Record<string, Record<string, DhanQuoteRow>>;
+export type DhanQuoteRow = DhanMarketRow;
+
+export type DhanMarketFeedResponse = {
+  data?: Record<string, Record<string, DhanMarketRow>>;
+  status?: string;
+};
+
+export type DhanQuoteResponse = DhanMarketFeedResponse;
+
+export type DhanAccessTokenResponse = {
+  dhanClientId?: string;
+  dhanClientName?: string;
+  dhanClientUcc?: string;
+  givenPowerOfAttorney?: boolean;
+  accessToken?: string;
+  expiryTime?: string;
+};
+
+export type DhanConsentResponse = {
+  consentAppId?: string;
+  consentAppStatus?: string;
   status?: string;
 };
 

@@ -33,7 +33,7 @@ export class PortfolioService {
   }
 
   getSnapshot(userId: string) {
-    return this.portfolioSnapshotService.createSnapshotFromLatest(userId);
+    return this.portfolioSnapshotService.getLatestSnapshot(userId);
   }
 
   async syncDhan(userId: string) {
@@ -43,14 +43,21 @@ export class PortfolioService {
         userId,
         sync.syncRunId,
       );
+    const holdings = await this.getHoldings(userId, {
+      preferCachedPrices: true,
+    });
 
     return {
       sync,
       snapshot,
+      holdings,
     };
   }
 
-  async getHoldings(userId: string) {
+  async getHoldings(
+    userId: string,
+    options: { preferCachedPrices?: boolean } = {},
+  ) {
     const { holdings: rows } =
       await this.brokerHoldingsQuery.findReconciledHoldings(userId);
 
@@ -70,7 +77,12 @@ export class PortfolioService {
       rawPayload: row.rawPayload,
     }));
 
-    const valuation = await this.holdingsValuation.value(userId, baseHoldings);
+    const valuation = await this.holdingsValuation.value(
+      userId,
+      baseHoldings,
+      new Date(),
+      { preferCachedPrices: options.preferCachedPrices ?? false },
+    );
 
     return {
       holdings: valuation.holdings,

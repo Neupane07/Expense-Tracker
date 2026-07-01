@@ -87,16 +87,16 @@ holding it computes `investedValue` (cost), `currentValue` (`qty * ltp`),
 `pnl`, `pnlPercent`, and (when previous close is available) `dayPnl` and
 `dayPnlPercent`. Stored `PriceSnapshot` rows under five minutes old are reused
 to avoid spamming Dhan; older or missing prices trigger a single bulk
-`/marketfeed/quote` call grouped by exchange segment. When live prices are
-unavailable the service falls back to average cost and emits a warning instead
-of silently masking the gap.
+`/marketfeed/ohlc` call across all exchange segments. Quote-class Dhan requests
+are serialized server-side to respect the 1 request/second limit and duplicate
+in-flight requests are coalesced. When live prices are unavailable the service
+falls back to average cost and emits a warning instead of silently masking the
+gap.
 
-`GET /portfolio/snapshot` now returns a top-level `summary` object with
-`totalInvested`, `totalCurrentValue`, `totalPnl`, `totalPnlPercent`, optional
-day P&L, plus per-bucket aggregates for `listed`, `mutualFunds`, and `cash`.
-`GET /portfolio/holdings` returns `{ holdings, summary, priceAsOf, warnings }`
-with the same per-holding valuation fields. Allocation percentages now use
-current values, not cost.
+`GET /portfolio/snapshot` returns the latest persisted snapshot and does not
+force a new live quote fetch on every request. `POST /portfolio/sync/dhan`
+creates a fresh snapshot and returns `{ sync, snapshot, holdings }` so the UI
+can reuse the just-valued holdings without an immediate duplicate quote fetch.
 
 ### Mutual Fund Holding
 

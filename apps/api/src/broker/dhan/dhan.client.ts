@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { BrokerCredentialsService } from '../broker-credentials.service';
+import { DhanQuoteRateLimiterService } from './dhan-quote-rate-limiter.service';
 import type {
   DhanCredentials,
   DhanFundLimit,
   DhanHistoricalResponse,
   DhanHolding,
+  DhanMarketFeedResponse,
   DhanOrder,
   DhanPosition,
   DhanQuoteResponse,
@@ -15,7 +17,10 @@ import type {
 export class DhanClient {
   private readonly baseUrl = 'https://api.dhan.co/v2';
 
-  constructor(private readonly brokerCredentials: BrokerCredentialsService) {}
+  constructor(
+    private readonly brokerCredentials: BrokerCredentialsService,
+    private readonly quoteRateLimiter: DhanQuoteRateLimiterService,
+  ) {}
 
   async getConfiguredClientId(userId: string) {
     return (await this.getCredentials(userId)).clientId;
@@ -41,13 +46,54 @@ export class DhanClient {
     return this.getJson<DhanFundLimit>(userId, '/fundlimit');
   }
 
+  async getUserProfile(userId: string) {
+    return this.getJson<{
+      dhanClientId?: string;
+      tokenValidity?: string;
+      dataPlan?: string;
+      dataValidity?: string;
+    }>(userId, '/profile');
+  }
+
+  async renewAccessToken(userId: string) {
+    const credentials = await this.getCredentials(userId);
+    const response = await fetch(`${this.baseUrl}/RenewToken`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'access-token': credentials.accessToken,
+        dhanClientId: credentials.clientId,
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new BadRequestException(
+        `Dhan RenewToken request failed with ${response.status}: ${body}`,
+      );
+    }
+
+    const payload = (await response.json()) as {
+      accessToken?: string;
+      expiryTime?: string;
+    };
+
+    if (!payload.accessToken) {
+      throw new BadRequestException(
+        'Dhan RenewToken did not return an access token.',
+      );
+    }
+
+    return payload;
+  }
+
   async getMarketQuote(
     userId: string,
     exchangeSegment: string,
     securityId: string,
   ) {
-    return this.postJson<DhanQuoteResponse>(userId, '/marketfeed/quote', {
-      [exchangeSegment]: [Number(securityId)],
+    return this.getMarketQuotes(userId, {
+      [exchangeSegment]: [securityId],
     });
   }
 
@@ -55,23 +101,33 @@ export class DhanClient {
     userId: string,
     securityIdsBySegment: Record<string, string[]>,
   ) {
-    const body: Record<string, number[]> = {};
+    return this.fetchMarketFeed(
+      userId,
+      '/marketfeed/quote',
+      securityIdsBySegment,
+    );
+  }
 
-    for (const [segment, ids] of Object.entries(securityIdsBySegment)) {
-      const numericIds = ids
-        .map((id) => Number(id))
-        .filter((id) => Number.isFinite(id) && id > 0);
+  async getMarketOhlc(
+    userId: string,
+    securityIdsBySegment: Record<string, string[]>,
+  ) {
+    return this.fetchMarketFeed(
+      userId,
+      '/marketfeed/ohlc',
+      securityIdsBySegment,
+    );
+  }
 
-      if (numericIds.length > 0) {
-        body[segment] = numericIds;
-      }
-    }
-
-    if (Object.keys(body).length === 0) {
-      return { data: {} } satisfies DhanQuoteResponse;
-    }
-
-    return this.postJson<DhanQuoteResponse>(userId, '/marketfeed/quote', body);
+  async getMarketLtp(
+    userId: string,
+    securityIdsBySegment: Record<string, string[]>,
+  ) {
+    return this.fetchMarketFeed(
+      userId,
+      '/marketfeed/ltp',
+      securityIdsBySegment,
+    );
   }
 
   async getHistoricalDailyCandles(
@@ -93,6 +149,53 @@ export class DhanClient {
       fromDate: input.fromDate,
       toDate: input.toDate,
     });
+  }
+
+  private async fetchMarketFeed(
+    userId: string,
+    path: '/marketfeed/quote' | '/marketfeed/ohlc' | '/marketfeed/ltp',
+    securityIdsBySegment: Record<string, string[]>,
+  ) {
+    const body = this.toMarketFeedBody(securityIdsBySegment);
+
+    if (Object.keys(body).length === 0) {
+      return { data: {} } satisfies DhanQuoteResponse;
+    }
+
+    const requestKey = this.marketFeedRequestKey(path, body);
+
+    return this.quoteRateLimiter.schedule(userId, requestKey, () =>
+      this.postJson<DhanMarketFeedResponse>(userId, path, body),
+    );
+  }
+
+  private toMarketFeedBody(securityIdsBySegment: Record<string, string[]>) {
+    const body: Record<string, number[]> = {};
+
+    for (const [segment, ids] of Object.entries(securityIdsBySegment)) {
+      const numericIds = ids
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+      if (numericIds.length > 0) {
+        body[segment] = numericIds;
+      }
+    }
+
+    return body;
+  }
+
+  private marketFeedRequestKey(path: string, body: Record<string, number[]>) {
+    const segments = Object.keys(body)
+      .sort()
+      .map((segment) => {
+        const ids = [...(body[segment] ?? [])].sort(
+          (left, right) => left - right,
+        );
+        return `${segment}:${ids.join(',')}`;
+      });
+
+    return `${path}:${segments.join('|')}`;
   }
 
   private async getJson<T>(userId: string, path: string) {

@@ -73,9 +73,35 @@ describe('BrokerCredentialsService', () => {
       hasAccessToken: true,
       clientIdMasked: '****1234',
       apiKeyMasked: '****abcd',
+      reconnectRequired: false,
     });
     expect(serialized).not.toContain('raw-api-key-should-not-leak');
     expect(serialized).not.toContain('raw-api-secret-should-not-leak');
     expect(serialized).not.toContain('raw-token-should-not-leak');
+  });
+
+  it('marks reconnect required when the access token is expired', async () => {
+    const prisma = {
+      brokerConnection: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'connection-1',
+          brokerName: 'Dhan',
+          provider: BrokerProvider.DHAN,
+          status: 'CONFIGURED',
+          clientIdMasked: '****1234',
+          apiKeyMasked: '****abcd',
+          accessTokenExpiresAt: new Date('2020-01-01T00:00:00.000Z'),
+          lastValidatedAt: null,
+          lastSyncAt: null,
+          metadata: { readOnly: true },
+          credentials: [{ credentialType: 'ACCESS_TOKEN' }],
+        }),
+      },
+    };
+    const service = createService('b'.repeat(32), prisma);
+    const response = await service.getDhanConnection('user-1');
+
+    expect(response.reconnectRequired).toBe(true);
+    expect(response.accessTokenExpired).toBe(true);
   });
 });

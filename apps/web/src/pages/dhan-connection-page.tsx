@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { KeyRound, ShieldCheck, Trash2 } from "lucide-react"
+import { ExternalLink, KeyRound, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
+import { useSearchParams } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +20,8 @@ type DhanConnection = {
   clientIdMasked: string | null
   apiKeyMasked: string | null
   accessTokenExpiresAt: string | null
+  accessTokenExpired?: boolean
+  reconnectRequired?: boolean
   lastValidatedAt: string | null
   lastSyncAt: string | null
 }
@@ -27,49 +30,89 @@ type FormState = {
   apiKey: string
   apiSecret: string
   clientId: string
-  accessToken: string
-  accessTokenExpiresAt: string
+}
+
+type StartConnectResponse = {
+  loginUrl: string
+  callbackUrl: string
+  expiresAt: string
 }
 
 const initialForm: FormState = {
   apiKey: "",
   apiSecret: "",
   clientId: "",
-  accessToken: "",
-  accessTokenExpiresAt: "",
 }
 
 export function DhanConnectionPage() {
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [searchParams] = useSearchParams()
+  const [refreshKey, setRefreshKey] = useState(() =>
+    searchParams.get("connected") === "1" ? 1 : 0,
+  )
   const [form, setForm] = useState<FormState>(initialForm)
   const [message, setMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const callbackMessage =
+    searchParams.get("connected") === "1"
+      ? "Dhan connected successfully. Access token saved securely."
+      : message
+  const callbackError = (() => {
+    const error = searchParams.get("error")
+    if (error === "connect_failed") {
+      return "Dhan login did not complete. Check your API key redirect URL and try again."
+    }
+    if (error === "session_required") {
+      return "Dhan login finished, but your Finance OS session was not available on callback. Stay signed in, then connect again without using a private/incognito window."
+    }
+    if (error === "missing_token") {
+      return "Dhan redirected back without a tokenId. Confirm your Dhan API redirect URL exactly matches the callback URL shown when you start connect."
+    }
+    if (error === "token_exchange_failed") {
+      return "Dhan returned from login, but token exchange failed. Verify API key/secret and reconnect."
+    }
+    return actionError
+  })()
   const [isSaving, setIsSaving] = useState(false)
   const { data, error, isLoading } = useApiQuery<DhanConnection>(
     `/broker/dhan/connection?refresh=${refreshKey}`,
   )
 
-  async function saveCredentials() {
+  async function connectWithDhan() {
     setIsSaving(true)
     setActionError(null)
     setMessage(null)
 
     try {
-      await apiPostJson("/broker/dhan/credentials", {
-        apiKey: form.apiKey,
-        apiSecret: form.apiSecret,
-        clientId: form.clientId,
-        accessToken: form.accessToken || null,
-        accessTokenExpiresAt: form.accessTokenExpiresAt
-          ? new Date(form.accessTokenExpiresAt).toISOString()
-          : null,
-      })
+      const result = await apiPostJson<StartConnectResponse>(
+        "/broker/dhan/connect/start",
+        form,
+      )
       setForm(initialForm)
-      setMessage("Dhan credentials saved securely.")
+      setMessage(
+        `Opening Dhan login. Ensure your Dhan API redirect URL is ${result.callbackUrl}.`,
+      )
+      window.location.assign(result.loginUrl)
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Unable to start Dhan connect",
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function renewToken() {
+    setIsSaving(true)
+    setActionError(null)
+    setMessage(null)
+
+    try {
+      await apiPostJson("/broker/dhan/connect/renew", {})
+      setMessage("Dhan access token renewed for another 24 hours.")
       setRefreshKey((value) => value + 1)
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : "Unable to save credentials",
+        error instanceof Error ? error.message : "Unable to renew Dhan token",
       )
     } finally {
       setIsSaving(false)
@@ -121,6 +164,8 @@ export function DhanConnectionPage() {
     return <ErrorState message={error ?? "Broker connection is unavailable"} />
   }
 
+  const tokenStatus = getTokenStatus(data)
+
   return (
     <div className="max-w-5xl space-y-5">
       <div>
@@ -135,20 +180,17 @@ export function DhanConnectionPage() {
           <div>
             <CardTitle>Connection Status</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Credentials are encrypted by the API and never shown after saving.
+              Read-only OAuth connection using Dhan API key and browser login.
             </p>
           </div>
-          <Badge variant={data.connected ? "default" : "secondary"}>
-            {data.status}
+          <Badge variant={data.connected && !data.reconnectRequired ? "default" : "secondary"}>
+            {tokenStatus.label}
           </Badge>
         </CardHeader>
         <CardContent className="grid gap-4 text-sm md:grid-cols-3">
           <StatusItem label="Client ID" value={data.clientIdMasked ?? "Not saved"} />
           <StatusItem label="API key" value={data.apiKeyMasked ?? "Not saved"} />
-          <StatusItem
-            label="Access token"
-            value={data.hasAccessToken ? "Saved" : "Not saved"}
-          />
+          <StatusItem label="Access token" value={tokenStatus.tokenLabel} />
           <StatusItem
             label="Token expiry"
             value={formatDateTime(data.accessTokenExpiresAt)}
@@ -163,9 +205,22 @@ export function DhanConnectionPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Secure Credentials</CardTitle>
+          <CardTitle>Connect with Dhan</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          <p className="text-sm text-muted-foreground">
+            Generate an individual API key in Dhan Web, set the redirect URL to
+            your API callback exactly, then connect here. Finance OS stores only
+            encrypted API credentials and the issued 24-hour access token.
+          </p>
+          <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            Dhan redirect URL must match your API callback, for example{" "}
+            <span className="font-mono text-foreground">
+              http://localhost:4000/broker/dhan/connect/callback
+            </span>
+            . After Dhan login you should return here with a success message, not
+            TOKEN_MISSING.
+          </p>
           <div className="grid gap-4 md:grid-cols-2">
             <CredentialInput
               id="clientId"
@@ -188,43 +243,31 @@ export function DhanConnectionPage() {
                 setForm((state) => ({ ...state, apiSecret: value }))
               }
             />
-            <CredentialInput
-              id="accessToken"
-              label="Access token"
-              type="password"
-              value={form.accessToken}
-              onChange={(value) =>
-                setForm((state) => ({ ...state, accessToken: value }))
-              }
-            />
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="accessTokenExpiresAt">Access token expiry</Label>
-              <Input
-                id="accessTokenExpiresAt"
-                type="datetime-local"
-                value={form.accessTokenExpiresAt}
-                onChange={(event) =>
-                  setForm((state) => ({
-                    ...state,
-                    accessTokenExpiresAt: event.target.value,
-                  }))
-                }
-              />
-            </div>
           </div>
 
-          {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-          {actionError ? <ErrorState message={actionError} /> : null}
+          {callbackMessage ? <p className="text-sm text-muted-foreground">{callbackMessage}</p> : null}
+          {callbackError ? <ErrorState message={callbackError} /> : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={saveCredentials} disabled={isSaving}>
-              <KeyRound className="size-4" aria-hidden="true" />
-              {isSaving ? "Saving" : "Save encrypted"}
+            <Button
+              onClick={connectWithDhan}
+              disabled={isSaving || !form.apiKey || !form.apiSecret || !form.clientId}
+            >
+              <ExternalLink className="size-4" aria-hidden="true" />
+              {isSaving ? "Starting" : "Connect with Dhan"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={renewToken}
+              disabled={isSaving || !data.hasAccessToken || data.reconnectRequired}
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
+              Renew token
             </Button>
             <Button
               variant="outline"
               onClick={validateConnection}
-              disabled={isSaving || !data.connected}
+              disabled={isSaving || !data.connected || data.reconnectRequired}
             >
               <ShieldCheck className="size-4" aria-hidden="true" />
               Validate
@@ -240,8 +283,42 @@ export function DhanConnectionPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Manual access token (fallback)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            If OAuth connect fails, paste a 24-hour access token from Dhan Web to
+            unblock sync while you fix the redirect URL.
+          </p>
+          <ManualTokenForm onSaved={() => setRefreshKey((value) => value + 1)} />
+        </CardContent>
+      </Card>
     </div>
   )
+}
+
+function getTokenStatus(data: DhanConnection) {
+  if (!data.hasAccessToken) {
+    return {
+      label: data.connected ? "TOKEN_MISSING" : "DISCONNECTED",
+      tokenLabel: "Not connected",
+    }
+  }
+
+  if (data.accessTokenExpired || data.reconnectRequired) {
+    return {
+      label: "RECONNECT_REQUIRED",
+      tokenLabel: "Expired — reconnect required",
+    }
+  }
+
+  return {
+    label: data.status,
+    tokenLabel: "Saved",
+  }
 }
 
 function StatusItem({ label, value }: { label: string; value: string }) {
@@ -278,6 +355,69 @@ function CredentialInput({
         autoComplete="off"
         onChange={(event) => onChange(event.target.value)}
       />
+    </div>
+  )
+}
+
+function ManualTokenForm({ onSaved }: { onSaved: () => void }) {
+  const [accessToken, setAccessToken] = useState("")
+  const [expiresAt, setExpiresAt] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function saveManualToken() {
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      await apiPostJson("/broker/dhan/connect/manual-token", {
+        accessToken,
+        accessTokenExpiresAt: expiresAt
+          ? new Date(expiresAt).toISOString()
+          : null,
+      })
+      setAccessToken("")
+      setExpiresAt("")
+      onSaved()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save token")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="manual-access-token">Access token</Label>
+          <Input
+            id="manual-access-token"
+            type="password"
+            value={accessToken}
+            autoComplete="off"
+            onChange={(event) => setAccessToken(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="manualAccessTokenExpiresAt">Token expiry</Label>
+          <Input
+            id="manualAccessTokenExpiresAt"
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(event) => setExpiresAt(event.target.value)}
+          />
+        </div>
+      </div>
+      {error ? <ErrorState message={error} /> : null}
+      <Button
+        variant="outline"
+        onClick={() => void saveManualToken()}
+        disabled={isSaving || !accessToken.trim()}
+      >
+        <KeyRound className="size-4" aria-hidden="true" />
+        Save manual token
+      </Button>
     </div>
   )
 }
