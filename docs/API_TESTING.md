@@ -215,6 +215,7 @@ With the API and web app running, verify:
 - `/scanner` loads `GET /scanner/readiness`, runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, shows research-only disclaimer text, and can save a candidate to the journal.
 - `/trade-journal` lists entries, creates manual plans, closes trades with review fields, and shows the manual-execution disclaimer.
 - `/research` loads symbol evidence, shows snapshot/warnings/data quality, adds manual items, and regenerates snapshots.
+- `/tools` loads the tool catalog, selects a registered tool, edits JSON input, runs `POST /tools/:name/execute`, renders the standard envelope (status, data, dataQuality, warnings, rejectReasons, asOf, durationMs, auditId), shows raw JSON, lists redacted audit history, and displays research-only plus manual-draft disclaimers. Tool input and results must not appear in browser storage.
 - `/scanner` candidate detail shows research status and links to `/research?symbol=...`.
 
 ## Scanner tests
@@ -350,7 +351,7 @@ List the tool catalog:
 
 ```bash
 curl -i \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   http://localhost:4000/tools
 ```
 
@@ -358,7 +359,7 @@ Inspect a single tool schema:
 
 ```bash
 curl -i \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   http://localhost:4000/tools/validate_trade_setup
 ```
 
@@ -367,7 +368,7 @@ Execute scanner readiness through the tool envelope:
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/get_scanner_readiness/execute \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -377,7 +378,7 @@ Execute trade validation (rejected path example):
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/validate_trade_setup/execute \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -394,7 +395,7 @@ Manual Super Order plan (formats parameters only; no broker call):
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/create_manual_super_order_plan/execute \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -411,7 +412,7 @@ List redacted audit history:
 
 ```bash
 curl -i \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   http://localhost:4000/tools/audits
 ```
 

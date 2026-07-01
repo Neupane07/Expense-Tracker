@@ -5,8 +5,8 @@
 Repository inspection date: 2026-07-01
 
 Phase 8 current-state hardening is complete. Phase 9 internal read-only tools
-exist on the backend and are actively being stabilized (contracts, tests, docs).
-Phase 10 Tool Tester UI is the next product milestone.
+are complete on the backend. Phase 10 Tool Tester UI is implemented in the web
+app on authenticated `/tools`.
 
 ## Executive Summary
 
@@ -17,11 +17,11 @@ manual research foundations with browser pages and unit/e2e tests.
 
 The canonical internal read-only tool registry is implemented in the API with
 versioned schemas, execution audit persistence, and eight initial tools. It is
-callable over authenticated `/tools` endpoints but not yet exercised through a
-browser Tool Tester.
+callable over authenticated `/tools` endpoints and exercised through the browser
+Tool Tester UI.
 
-The largest remaining architectural gap for AI-facing workflows is the Tool
-Tester UI (Phase 10), followed by the read-only MCP adapter (Phase 11).
+The largest remaining architectural gap for AI-facing workflows is the
+read-only MCP adapter (Phase 11).
 Important domain gaps also remain in instrument-master coverage, corporate-action
 ingestion, automated research sources, market regime/sector breadth, and broad
 scanner universe expansion.
@@ -80,16 +80,26 @@ scanner universe expansion.
   Super Order plan formatting (no broker calls)
 - authenticated `/tools` catalog, schema, execute, and audit endpoints
 
+### Tool Tester UI (Phase 10)
+
+- authenticated `/tools` route in Finance OS navigation
+- tool catalog with name, version, description, and read-only badge
+- schema-derived starter JSON input editor with client syntax feedback
+- execution through `POST /tools/:name/execute` only (no direct domain bypass)
+- structured envelope rendering: status, data, dataQuality, warnings,
+  rejectReasons, asOf, durationMs, auditId, and raw JSON tab
+- redacted per-user audit history from `GET /tools/audits`
+- research-only and manual Super Order draft disclaimers
+- Vitest coverage for catalog, JSON validation, envelope rendering, audits,
+  disclaimers, and no browser-storage persistence
+
 ## Partial
 
 ### Internal tools (Phase 9 backend)
 
-- Backend registry, executor, audit persistence, and eight tool handlers exist.
-- Contract stabilization is ongoing: response redaction vs audit metadata,
-  blocked-tool output shapes, timeout cancellation, and research freshness
-  semantics must stay aligned across services, tests, and docs.
-- No browser Tool Tester route yet. The AI-facing contract is API-real but not
-  product-accepted until Phase 10.
+- Backend registry, executor, audit persistence, and eight tool handlers are
+  complete and covered by unit/e2e tests.
+- Browser Tool Tester (Phase 10) is the acceptance harness for these contracts.
 
 ### Instrument and market-data foundation
 
@@ -152,7 +162,6 @@ scanner universe expansion.
 
 ## Missing
 
-- Tool Tester UI (Phase 10)
 - read-only MCP server/adapter (Phase 11)
 - instrument-master and corporate-action ingestion pipelines
 - official/licensed filing and news ingestion
@@ -191,11 +200,12 @@ by this repository.
 /scanner
 /trade-journal
 /research
+/tools
 /settings/broker-connections/dhan
 /admin/invitations
 ```
 
-No Tool Tester route exists.
+`/tools` — Tool Tester (Phase 10)
 
 ## Current Database Areas
 
@@ -253,20 +263,19 @@ Remaining high-value gaps:
 
 - broader authenticated API e2e coverage across portfolio/market-data/research
 - controller/DTO validation contracts
-- Tool Tester UI integration tests (Phase 10)
+- Tool Tester UI integration tests (Phase 10) — implemented in `apps/web`
 - deployment/security tests for MCP only after it exists
 
 ## Immediate Recommendation
 
-Stabilize internal-tool and research contracts on the backend until tests and
-docs agree. Then execute Phase 10 in `docs/ROADMAP.md`: build the Tool Tester UI
-on top of `/tools` as the acceptance harness before MCP or broader market-data
-work.
+Stabilize internal-tool contracts on the backend until tests and docs agree.
+Phase 10 Tool Tester UI is complete. Next execute Phase 11 in `docs/ROADMAP.md`:
+build the read-only MCP adapter only after Tool Tester acceptance.
 
 Recommended order:
 
 ```text
-backend contract stability -> Tool Tester UI -> MCP adapter -> provider/data breadth
+Tool Tester UI (done) -> MCP adapter -> provider/data breadth
 ```
 
 ## Non-Negotiable Boundaries

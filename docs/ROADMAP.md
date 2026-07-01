@@ -57,7 +57,7 @@ Exit gate:
 
 ## Phase 10: Tool Tester UI
 
-Status: Next
+Status: Complete
 
 Goal: prove internal tools in the browser before external exposure.
 
@@ -77,7 +77,7 @@ Exit gate:
 
 ## Phase 11: Read-Only MCP Adapter
 
-Status: Planned after Tool Tester acceptance
+Status: Next
 
 Goal: expose stable internal tools to approved AI assistants.
 

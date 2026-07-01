@@ -14,6 +14,7 @@ import { PortfolioPage } from "@/pages/portfolio-page"
 import { ReviewPage } from "@/pages/review-page"
 import { RulesPage } from "@/pages/rules-page"
 import { SignInPage } from "@/pages/sign-in-page"
+import { ToolTesterPage } from "@/pages/tool-tester-page"
 import { TransactionsPage } from "@/pages/transactions-page"
 
 export default function App() {
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="/scanner" element={<SwingScannerPage />} />
         <Route path="/trade-journal" element={<TradeJournalPage />} />
         <Route path="/research" element={<ResearchPage />} />
+        <Route path="/tools" element={<ToolTesterPage />} />
         <Route
           path="/settings/broker-connections/dhan"
           element={<DhanConnectionPage />}

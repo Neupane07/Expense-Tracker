@@ -26,6 +26,7 @@ const routeTitles = new Map([
   ["/scanner", "Swing Scanner"],
   ["/trade-journal", "Trade Journal"],
   ["/research", "Research"],
+  ["/tools", "Tool Tester"],
   ["/settings/broker-connections/dhan", "Broker Connections"],
   ["/admin/invitations", "Invitations"],
 ])
