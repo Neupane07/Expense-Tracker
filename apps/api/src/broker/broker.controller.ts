@@ -9,11 +9,13 @@ import {
   Req,
   Res,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { AuthService } from '../auth/auth.service';
 import {
   BrokerCredentialsService,
   type SaveDhanAppCredentialsInput,
@@ -30,6 +32,7 @@ export class BrokerController {
     private readonly brokerService: BrokerService,
     private readonly brokerCredentials: BrokerCredentialsService,
     private readonly dhanAuth: DhanAuthService,
+    private readonly authService: AuthService,
   ) {}
 
   @Get()
@@ -69,21 +72,60 @@ export class BrokerController {
     @Res() response: Response,
     @Query('tokenId') tokenId?: string,
   ) {
-    if (!tokenId) {
-      this.dhanAuth.redirectAfterConnect(response, 'failed');
+    if (!tokenId?.trim()) {
+      this.dhanAuth.redirectAfterConnect(response, 'failed', 'missing_token');
+      return;
+    }
+
+    const user = await this.authService.authenticateRequest(request);
+    if (!user) {
+      this.logger.warn(
+        'Dhan connect callback received tokenId without an authenticated Finance OS session.',
+      );
+      this.dhanAuth.redirectAfterConnect(
+        response,
+        'failed',
+        'session_required',
+      );
       return;
     }
 
     try {
-      await this.dhanAuth.completeConnect(request, response, tokenId);
+      await this.dhanAuth.completeConnectForUser(user.id, tokenId.trim());
       this.dhanAuth.redirectAfterConnect(response, 'success');
     } catch (error) {
       this.logger.error(
         'Dhan connect callback failed before credentials could be stored.',
         error instanceof Error ? error.stack : undefined,
       );
-      this.dhanAuth.redirectAfterConnect(response, 'failed');
+      const reason =
+        error instanceof Error && error.message.includes('token exchange')
+          ? 'token_exchange_failed'
+          : 'connect_failed';
+      this.dhanAuth.redirectAfterConnect(response, 'failed', reason);
     }
+  }
+
+  @Post('dhan/connect/manual-token')
+  @UseGuards(SessionAuthGuard)
+  async saveManualDhanToken(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body()
+    input: { accessToken?: string; accessTokenExpiresAt?: string | null },
+  ) {
+    const accessToken = input.accessToken?.trim();
+    if (!accessToken) {
+      throw new BadRequestException('accessToken is required.');
+    }
+
+    await this.brokerCredentials.saveDhanAccessToken(user.id, {
+      accessToken,
+      accessTokenExpiresAt: input.accessTokenExpiresAt
+        ? new Date(input.accessTokenExpiresAt)
+        : new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    return this.brokerCredentials.getDhanConnection(user.id);
   }
 
   @Post('dhan/connect/renew')

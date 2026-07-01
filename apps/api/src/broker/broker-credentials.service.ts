@@ -12,7 +12,7 @@ import {
   randomBytes,
 } from 'node:crypto';
 import { z } from 'zod';
-import { BrokerProvider } from '../generated/prisma/client';
+import { BrokerProvider, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const CREDENTIAL_KEY_ENV = 'FINANCE_OS_CREDENTIAL_KEY';
@@ -242,6 +242,108 @@ export class BrokerCredentialsService implements OnModuleInit {
     );
 
     return this.getDhanConnection(userId);
+  }
+
+  async saveDhanPendingConnect(
+    userId: string,
+    input: {
+      clientId: string;
+      consentAppId: string;
+      expiresAt: Date;
+    },
+  ) {
+    const connection = await this.prisma.brokerConnection.findUnique({
+      where: {
+        userId_provider: {
+          userId,
+          provider: BrokerProvider.DHAN,
+        },
+      },
+    });
+
+    if (!connection) {
+      throw new BadRequestException('Dhan credentials are not configured.');
+    }
+
+    const metadata = this.mergeMetadata(connection.metadata, {
+      readOnly: true,
+      credentialVersion: 'v2',
+      authFlow: 'oauth',
+      pendingConnect: {
+        clientId: input.clientId,
+        consentAppId: input.consentAppId,
+        expiresAt: input.expiresAt.toISOString(),
+      },
+    });
+
+    await this.prisma.brokerConnection.update({
+      where: { id: connection.id },
+      data: { metadata: this.toJson(metadata) },
+    });
+  }
+
+  async getDhanPendingConnect(userId: string) {
+    const connection = await this.prisma.brokerConnection.findUnique({
+      where: {
+        userId_provider: {
+          userId,
+          provider: BrokerProvider.DHAN,
+        },
+      },
+    });
+
+    if (!connection?.metadata || typeof connection.metadata !== 'object') {
+      return null;
+    }
+
+    const pending = (connection.metadata as Record<string, unknown>)
+      .pendingConnect;
+    if (!pending || typeof pending !== 'object') {
+      return null;
+    }
+
+    const record = pending as Record<string, unknown>;
+    const clientId =
+      typeof record.clientId === 'string' ? record.clientId : null;
+    const consentAppId =
+      typeof record.consentAppId === 'string' ? record.consentAppId : null;
+    const expiresAtRaw =
+      typeof record.expiresAt === 'string' ? record.expiresAt : null;
+
+    if (!clientId || !consentAppId || !expiresAtRaw) {
+      return null;
+    }
+
+    const expiresAt = new Date(expiresAtRaw);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+      return null;
+    }
+
+    return { clientId, consentAppId, expiresAt };
+  }
+
+  async clearDhanPendingConnect(userId: string) {
+    const connection = await this.prisma.brokerConnection.findUnique({
+      where: {
+        userId_provider: {
+          userId,
+          provider: BrokerProvider.DHAN,
+        },
+      },
+    });
+
+    if (!connection) {
+      return;
+    }
+
+    const metadata = this.mergeMetadata(connection.metadata, {
+      pendingConnect: null,
+    });
+
+    await this.prisma.brokerConnection.update({
+      where: { id: connection.id },
+      data: { metadata: this.toJson(metadata) },
+    });
   }
 
   async saveDhanCredentials(userId: string, input: SaveDhanCredentialsInput) {
@@ -488,6 +590,22 @@ export class BrokerCredentialsService implements OnModuleInit {
     const normalized = value.trim();
     const suffix = normalized.slice(-4);
     return suffix ? `****${suffix}` : '****';
+  }
+
+  private mergeMetadata(
+    existing: unknown,
+    patch: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const base =
+      existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? { ...(existing as Record<string, unknown>) }
+        : {};
+
+    return { ...base, ...patch };
+  }
+
+  private toJson(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 
   private isAccessTokenExpired(expiresAt: Date | null) {

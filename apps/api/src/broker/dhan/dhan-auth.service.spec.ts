@@ -1,5 +1,4 @@
 import { ForbiddenException } from '@nestjs/common';
-import { createHmac } from 'node:crypto';
 import { BrokerCredentialsService } from '../broker-credentials.service';
 import { DhanAuthService } from './dhan-auth.service';
 import { DhanClient } from './dhan.client';
@@ -7,6 +6,9 @@ import { DhanClient } from './dhan.client';
 function createAuthService(options?: {
   saveApp?: jest.Mock;
   saveToken?: jest.Mock;
+  savePending?: jest.Mock;
+  getPending?: jest.Mock;
+  clearPending?: jest.Mock;
   getConnection?: jest.Mock;
   getCredentials?: jest.Mock;
   renewToken?: jest.Mock;
@@ -17,6 +19,17 @@ function createAuthService(options?: {
       options?.saveApp ?? jest.fn().mockResolvedValue({ connected: true }),
     saveDhanAccessToken:
       options?.saveToken ?? jest.fn().mockResolvedValue({ connected: true }),
+    saveDhanPendingConnect:
+      options?.savePending ?? jest.fn().mockResolvedValue(undefined),
+    getDhanPendingConnect:
+      options?.getPending ??
+      jest.fn().mockResolvedValue({
+        clientId: '1000000001',
+        consentAppId: 'consent-123',
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    clearDhanPendingConnect:
+      options?.clearPending ?? jest.fn().mockResolvedValue(undefined),
     getDhanConnection:
       options?.getConnection ??
       jest.fn().mockResolvedValue({
@@ -79,7 +92,8 @@ describe('DhanAuthService', () => {
 
   it('starts connect by saving app credentials and returning a Dhan login URL', async () => {
     const saveApp = jest.fn().mockResolvedValue({ connected: true });
-    const { service, fetchMock } = createAuthService({ saveApp });
+    const savePending = jest.fn().mockResolvedValue(undefined);
+    const { service, fetchMock } = createAuthService({ saveApp, savePending });
     fetchMock.mockResolvedValue({
       ok: true,
       json: () =>
@@ -97,6 +111,7 @@ describe('DhanAuthService', () => {
     });
 
     expect(saveApp).toHaveBeenCalled();
+    expect(savePending).toHaveBeenCalled();
     expect(result.loginUrl).toContain('consentAppId=consent-123');
     expect(response.cookie).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -105,22 +120,20 @@ describe('DhanAuthService', () => {
     );
   });
 
-  it('completes connect by exchanging tokenId and storing only encrypted token metadata', async () => {
+  it('completes connect for the signed-in user via token exchange', async () => {
     const saveToken = jest.fn().mockResolvedValue({ connected: true });
-    const { service, fetchMock } = createAuthService({ saveToken });
-    const secret = 'test-auth-secret-with-32-bytes-min';
-    const payload = Buffer.from(
-      JSON.stringify({
-        userId: 'user-1',
+    const clearPending = jest.fn().mockResolvedValue(undefined);
+    const { service, fetchMock } = createAuthService({
+      saveToken,
+      clearPending,
+      getCredentials: jest.fn().mockResolvedValue({
+        apiKey: 'app-key',
+        apiSecret: 'app-secret',
         clientId: '1000000001',
-        consentAppId: 'consent-123',
-        expiresAt: Date.now() + 60_000,
+        accessToken: null,
+        accessTokenExpiresAt: null,
       }),
-    ).toString('base64url');
-    const state = 'state-token';
-    const signature = createHmac('sha256', secret)
-      .update(`${state}.${payload}`)
-      .digest('base64url');
+    });
 
     fetchMock.mockResolvedValue({
       ok: true,
@@ -132,16 +145,8 @@ describe('DhanAuthService', () => {
         }),
     } as Response);
 
-    const request = {
-      headers: {
-        cookie: `finance_os_dhan_oauth=${state}.${payload}.${signature}`,
-      },
-    };
-    const response = { clearCookie: jest.fn() };
-
-    const connection = await service.completeConnect(
-      request as never,
-      response as never,
+    const connection = await service.completeConnectForUser(
+      'user-1',
       'token-id-123',
     );
 
@@ -152,6 +157,7 @@ describe('DhanAuthService', () => {
         clientId: '1000000001',
       }),
     );
+    expect(clearPending).toHaveBeenCalledWith('user-1');
     expect(JSON.stringify(connection)).not.toContain('issued-token');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/app/consumeApp-consent'),

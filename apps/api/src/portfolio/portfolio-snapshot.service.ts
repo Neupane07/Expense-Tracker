@@ -57,31 +57,84 @@ export class PortfolioSnapshotService {
     const source = this.readSnapshotSource(snapshot.source);
     const allocation = this.readAllocation(snapshot.allocation);
     const mutualFunds = await this.mutualFundsService.getValuations(userId);
+    const listedSummary = await this.resolveListedSummary(
+      userId,
+      source,
+      allocation.cashValue,
+      mutualFunds,
+    );
+    const summary =
+      source.summary ??
+      this.buildSummary({
+        listed: listedSummary,
+        mutualFunds,
+        cashValue: allocation.cashValue,
+      });
 
     return {
       id: snapshot.id,
       snapshotTime: snapshot.snapshotTime,
       brokerAccountId: snapshot.brokerAccountId,
       allocation,
-      summary:
-        source.summary ??
-        this.buildSummary({
-          listed: source.listedSummary ?? emptyListedSummary(),
-          mutualFunds,
-          cashValue: allocation.cashValue,
-        }),
-      listedSummary: source.listedSummary ?? emptyListedSummary(),
+      summary,
+      listedSummary,
       priceAsOf: source.priceAsOf ? new Date(source.priceAsOf) : null,
       mutualFunds,
       warnings: [...snapshot.warnings, ...mutualFunds.warnings],
       source: {
         brokerProvider: source.brokerProvider ?? BrokerProvider.DHAN,
         syncRunId: source.syncRunId ?? null,
-        holdingCount: source.holdingCount ?? 0,
+        holdingCount: source.holdingCount ?? listedSummary.holdingCount,
         fundSnapshotId: source.fundSnapshotId ?? null,
         mutualFundHoldingCount: mutualFunds.holdings.length,
       },
     };
+  }
+
+  private async resolveListedSummary(
+    userId: string,
+    source: {
+      holdingCount: number;
+      listedSummary?:
+        | import('./holdings-valuation.service').HoldingsValuationSummary
+        | undefined;
+    },
+    _cashValue: number,
+    _mutualFunds: Awaited<ReturnType<MutualFundsService['getValuations']>>,
+  ) {
+    if (source.listedSummary && source.listedSummary.holdingCount > 0) {
+      return source.listedSummary;
+    }
+
+    if ((source.holdingCount ?? 0) === 0) {
+      return emptyListedSummary();
+    }
+
+    const { holdings } =
+      await this.brokerHoldingsQuery.findReconciledHoldings(userId);
+    if (holdings.length === 0) {
+      return emptyListedSummary();
+    }
+
+    const valuation = await this.holdingsValuation.value(
+      userId,
+      holdings.map((holding) => ({
+        tradingSymbol: holding.tradingSymbol,
+        securityId: holding.securityId,
+        exchange: holding.exchange,
+        isin: holding.isin,
+        assetClass: holding.assetClass,
+        totalQty: this.decimalToNumber(holding.totalQty),
+        costValue: this.decimalToNumber(holding.costValue),
+      })),
+      new Date(),
+      { preferCachedPrices: true },
+    );
+
+    void _cashValue;
+    void _mutualFunds;
+
+    return valuation.summary;
   }
 
   private async buildSnapshot(userId: string, syncRunId?: string) {

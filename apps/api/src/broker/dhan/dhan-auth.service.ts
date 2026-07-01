@@ -65,10 +65,16 @@ export class DhanAuthService {
     } satisfies PendingConnect);
     const signedPayload = `${state}.${Buffer.from(payload).toString('base64url')}.${this.sign(`${state}.${Buffer.from(payload).toString('base64url')}`)}`;
 
+    await this.brokerCredentials.saveDhanPendingConnect(userId, {
+      clientId: input.clientId.trim(),
+      consentAppId,
+      expiresAt: new Date(Date.now() + CONSENT_TTL_MS),
+    });
+
     response.cookie(DHAN_OAUTH_COOKIE, signedPayload, {
       ...this.baseCookieOptions(),
       maxAge: CONSENT_TTL_MS,
-      path: '/broker/dhan/connect/callback',
+      path: '/',
     });
 
     return {
@@ -79,13 +85,12 @@ export class DhanAuthService {
     };
   }
 
-  async completeConnect(request: Request, response: Response, tokenId: string) {
-    const pending = this.readPendingConnect(request);
-    const credentials = await this.brokerCredentials.getDhanCredentials(
-      pending.userId,
-    );
+  async completeConnectForUser(userId: string, tokenId: string) {
+    const pending =
+      (await this.brokerCredentials.getDhanPendingConnect(userId)) ?? null;
+    const credentials = await this.brokerCredentials.getDhanCredentials(userId);
 
-    if (credentials.clientId !== pending.clientId) {
+    if (pending && credentials.clientId !== pending.clientId) {
       throw new ForbiddenException(
         'Dhan connect session does not match saved client id.',
       );
@@ -101,15 +106,23 @@ export class DhanAuthService {
       throw new BadRequestException('Dhan did not return an access token.');
     }
 
-    await this.brokerCredentials.saveDhanAccessToken(pending.userId, {
+    await this.brokerCredentials.saveDhanAccessToken(userId, {
       accessToken: token.accessToken,
       accessTokenExpiresAt: this.parseExpiry(token.expiryTime),
-      clientId: token.dhanClientId ?? pending.clientId,
+      clientId: token.dhanClientId ?? pending?.clientId ?? credentials.clientId,
     });
+    await this.brokerCredentials.clearDhanPendingConnect(userId);
+
+    return this.brokerCredentials.getDhanConnection(userId);
+  }
+
+  async completeConnect(request: Request, response: Response, tokenId: string) {
+    const pending = this.readPendingConnect(request);
+    await this.completeConnectForUser(pending.userId, tokenId);
 
     response.clearCookie(DHAN_OAUTH_COOKIE, {
       ...this.baseCookieOptions(),
-      path: '/broker/dhan/connect/callback',
+      path: '/',
     });
 
     return this.brokerCredentials.getDhanConnection(pending.userId);
@@ -138,11 +151,20 @@ export class DhanAuthService {
     };
   }
 
-  redirectAfterConnect(response: Response, outcome: 'success' | 'failed') {
-    const query =
-      outcome === 'success' ? 'connected=1' : 'error=connect_failed';
+  redirectAfterConnect(
+    response: Response,
+    outcome: 'success' | 'failed',
+    reason?: string,
+  ) {
+    const params = new URLSearchParams();
+    if (outcome === 'success') {
+      params.set('connected', '1');
+    } else {
+      params.set('error', reason ?? 'connect_failed');
+    }
+
     response.redirect(
-      `${this.frontendUrl()}/settings/broker-connections/dhan?${query}`,
+      `${this.frontendUrl()}/settings/broker-connections/dhan?${params.toString()}`,
     );
   }
 
