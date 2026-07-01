@@ -5,6 +5,7 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   FileSpreadsheet,
+  FlaskConical,
   ListChecks,
   ReceiptText,
   ScanSearch,
@@ -52,6 +53,7 @@ export const navGroups: NavGroup[] = [
       { href: "/scanner", label: "Swing Scanner", icon: ScanSearch },
       { href: "/trade-journal", label: "Trade Journal", icon: ClipboardList },
       { href: "/research", label: "Research", icon: BookOpenText },
+      { href: "/tools", label: "Tool Tester", icon: FlaskConical },
       {
         href: "/settings/broker-connections/dhan",
         label: "Settings",

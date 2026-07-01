@@ -3,15 +3,16 @@
 ## Status
 
 Phase 9 complete: internal read-only tool registry is implemented in
-`apps/api/src/internal-tools`. Tool Tester UI and MCP adapter are not built
-yet.
+`apps/api/src/internal-tools`. Tool Tester UI (Phase 10) is implemented at
+`/tools` in `apps/web`; registry acceptance through that UI is pending. MCP
+adapter is not built yet.
 
 ## Required Build Order
 
 1. harden data-quality/readiness contracts — done (Phase 8)
 2. build internal read-only tool registry — done (Phase 9)
-3. exercise it through the Tool Tester UI — next (Phase 10)
-4. expose an approved subset through MCP — after Tool Tester acceptance
+3. exercise it through the Tool Tester UI — implemented; manual acceptance pending (Phase 10)
+4. expose an approved subset through MCP — after Phase 10 acceptance (Phase 11)
 
 MCP must not be the first implementation of tool business logic. MCP and the
 Tool Tester must call the same registry entry points as
@@ -75,12 +76,15 @@ does not send anything to Dhan.
 
 ## Tool Tester
 
-The tester should invoke the registry exactly as MCP later will. It should show:
+Implemented at `/tools` in `apps/web`. The tester invokes the registry exactly as MCP later will. It shows:
 
-- tool name, version, description, and schemas
-- input JSON and validation errors
-- output JSON, data quality, warnings, rejects, and duration
-- redacted audit history
+- tool name, version, description, and read-only status
+- input JSON with client syntax validation and schema-derived starter values
+- output JSON, data quality, warnings, rejects, duration, and audit ID
+- redacted audit history (metadata only)
+
+**Phase 10 is not closed** until an authenticated user completes the manual
+acceptance checklist in `docs/API_TESTING.md` (all eight tools through `/tools`).
 
 This UI is how contracts, failure modes, and redaction are accepted before an
 external AI client is allowed to call them.

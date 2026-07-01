@@ -173,6 +173,24 @@ Patterns:
 - Render stored `validationSnapshot` warnings/rejects without recomputing risk client-side.
 - Do not add broker order actions or auto-trading controls.
 
+### Tool Tester
+
+Route: `/tools`
+
+- Finance OS sidebar entry **Tool Tester** (authenticated session required).
+- Catalog table: tool name, version, description, read-only badge.
+- Select a tool to load schema-derived starter JSON in a mono `Textarea`.
+- Client-side JSON syntax feedback; Run disabled until JSON parses.
+- Run calls `POST /tools/:name/execute` only — no direct portfolio/scanner/research/risk bypass.
+- Structured response panel: status, asOf, durationMs, auditId, data, dataQuality,
+  warnings, rejectReasons; raw JSON tab for the full envelope.
+- Server-side schema errors surface from rejected envelopes (`INVALID_INPUT`, issue list).
+- Redacted audit history from `GET /tools/audits?limit=50` (metadata only).
+- Research-only disclaimer on every visit; additional **Manual draft only** banner for
+  `create_manual_super_order_plan`.
+- Never store tool input or results in `localStorage` / `sessionStorage`.
+- Never expose broker secrets or broker write controls.
+
 ### Invitations
 Route: `/admin/invitations`
 

@@ -215,6 +215,7 @@ With the API and web app running, verify:
 - `/scanner` loads `GET /scanner/readiness`, runs `POST /scanner/swing/run`, loads `GET /scanner/swing/candidates`, shows research-only disclaimer text, and can save a candidate to the journal.
 - `/trade-journal` lists entries, creates manual plans, closes trades with review fields, and shows the manual-execution disclaimer.
 - `/research` loads symbol evidence, shows snapshot/warnings/data quality, adds manual items, and regenerates snapshots.
+- `/tools` loads the tool catalog, selects a registered tool, edits JSON input, runs `POST /tools/:name/execute`, renders the standard envelope (status, data, dataQuality, warnings, rejectReasons, asOf, durationMs, auditId), shows raw JSON, lists redacted audit history, and displays research-only plus manual-draft disclaimers. Tool input and results must not appear in browser storage.
 - `/scanner` candidate detail shows research status and links to `/research?symbol=...`.
 
 ## Scanner tests
@@ -350,7 +351,7 @@ List the tool catalog:
 
 ```bash
 curl -i \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   http://localhost:4000/tools
 ```
 
@@ -358,7 +359,7 @@ Inspect a single tool schema:
 
 ```bash
 curl -i \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   http://localhost:4000/tools/validate_trade_setup
 ```
 
@@ -367,7 +368,7 @@ Execute scanner readiness through the tool envelope:
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/get_scanner_readiness/execute \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -377,7 +378,7 @@ Execute trade validation (rejected path example):
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/validate_trade_setup/execute \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -394,7 +395,7 @@ Manual Super Order plan (formats parameters only; no broker call):
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/create_manual_super_order_plan/execute \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -411,7 +412,7 @@ List redacted audit history:
 
 ```bash
 curl -i \
-  -H "Cookie: expense_session=<session-cookie>" \
+  -H "Cookie: finance_os_session=<session-cookie>" \
   http://localhost:4000/tools/audits
 ```
 
@@ -425,6 +426,39 @@ Tool checks should show:
 - `POST /tools/place_order/execute` returns 404 (forbidden tool name)
 - audit records contain metadata only (no full financial output payload)
 - `validate_trade_setup` and `POST /risk/validate-trade` agree for the same input
+
+## Tool Tester UI acceptance (Phase 10 exit gate)
+
+Record this checklist in the PR or session notes before marking Phase 10 complete
+in `docs/ROADMAP.md` and `docs/PROJECT_STATE.md`.
+
+Prerequisites: `docker compose up -d`, `pnpm dev:api`, `pnpm dev:web`, signed-in
+session.
+
+1. Open `/tools` from Finance OS navigation while authenticated.
+2. Confirm catalog lists all eight tools with version, description, and read-only badge.
+3. Run each tool through the UI (not direct domain APIs):
+   - `get_portfolio_snapshot` — `{}`
+   - `get_market_data_status` — `{}` or `{"symbols":["INFY"]}`
+   - `get_scanner_readiness` — `{}`
+   - `scan_swing_candidates` — `{}`
+   - `validate_trade_setup` — starter trade JSON (expect ok or rejected envelope)
+   - `get_stock_deep_dive` — `{"symbol":"INFY"}`
+   - `get_research_snapshot` — `{"symbol":"INFY"}`
+   - `create_manual_super_order_plan` — starter trade JSON; confirm **Manual draft only** banner
+4. For at least one run, verify structured panel shows status, data, dataQuality,
+   warnings, rejectReasons (if any), asOf, durationMs, auditId, and raw JSON tab.
+5. Trigger invalid JSON in the editor — Run disabled with syntax error shown.
+6. Trigger server validation error (e.g. incomplete `validate_trade_setup` input) —
+   rejected envelope with `INVALID_INPUT` and issue list.
+7. Confirm audit history updates with redacted metadata only (no secrets).
+8. Confirm DevTools Application tab shows no tool input/output in localStorage or
+   sessionStorage after runs.
+9. Spot-check `/dashboard`, `/portfolio`, `/scanner`, `/trade-journal`, `/research`
+   still load.
+
+Optional cross-check: same tool + input via `curl POST /tools/:name/execute` should
+return the same envelope shape as the UI run.
 
 ## Trade journal tests
 
