@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CorporateActionPolicyService } from './corporate-action-policy.service';
 import { InstrumentVerificationService } from './instrument-verification.service';
 
 describe('InstrumentVerificationService', () => {
@@ -6,7 +7,7 @@ describe('InstrumentVerificationService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [InstrumentVerificationService],
+      providers: [CorporateActionPolicyService, InstrumentVerificationService],
     }).compile();
 
     service = module.get(InstrumentVerificationService);
@@ -92,7 +93,6 @@ describe('InstrumentVerificationService', () => {
 
     for (const result of [unadjusted, storedAdjustedFlagOnly]) {
       expect(result.adjustmentStatus).toBe('UNVERIFIED');
-      expect(result.providerAvailable).toBe(false);
       expect(result.blocksHistoricalAnalysis).toBe(true);
       expect(result.blockers).toContain(
         'CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED',
@@ -100,14 +100,16 @@ describe('InstrumentVerificationService', () => {
     }
   });
 
-  it('does not pretend a corporate-action provider exists', () => {
+  it('verifies provider-adjusted Dhan daily candles without event catalog', () => {
     const result = service.evaluateCorporateActionPolicy({
       candleCount: 10,
       unadjustedCount: 0,
       providerClaimsAdjusted: true,
     });
 
-    expect(result.providerAvailable).toBe(false);
+    expect(result.providerAvailable).toBe(true);
+    expect(result.eventProviderAvailable).toBe(false);
+    expect(result.adjustmentStatus).toBe('VERIFIED');
     expect(result.blocksHistoricalAnalysis).toBe(false);
   });
 });

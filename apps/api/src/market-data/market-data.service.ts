@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CandlesService } from './candles.service';
+import { CorporateActionSyncService } from './corporate-action.service';
+import type { CorporateActionImportEvent } from './corporate-action.dto';
 import { IndicatorsService } from './indicators.service';
 import { InstrumentMasterSyncService } from './instrument-master-sync.service';
 import { InstrumentsService } from './instruments.service';
@@ -13,6 +15,7 @@ export class MarketDataService {
     private readonly candles: CandlesService,
     private readonly indicators: IndicatorsService,
     private readonly instrumentMasterSync: InstrumentMasterSyncService,
+    private readonly corporateActions: CorporateActionSyncService,
   ) {}
 
   getStatus() {
@@ -28,6 +31,18 @@ export class MarketDataService {
 
   syncInstrumentMaster(options: { force?: boolean } = {}) {
     return this.instrumentMasterSync.syncFromProvider(options);
+  }
+
+  getCorporateActionStatus() {
+    return this.corporateActions.getStatusSummary();
+  }
+
+  syncCorporateActions() {
+    return this.corporateActions.syncFromProvider();
+  }
+
+  importCorporateActions(events: CorporateActionImportEvent[]) {
+    return this.corporateActions.importEvents(events);
   }
 
   async getInstrument(userId: string, symbol: string) {

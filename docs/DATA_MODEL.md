@@ -47,9 +47,11 @@ reconciliation. They are read-only observations, not order-management records.
 - `InstrumentMasterEntry`: global Dhan scrip-master row with lifecycle status and raw source metadata
 - `InstrumentMasterSyncRun`: idempotent import/sync run status, counts, and provider metadata
 - `PriceSnapshot`: timestamped quote and quality metadata
-- `DailyCandle`: sourced OHLCV row with adjustment flag
+- `DailyCandle`: sourced OHLCV row with provider adjustment metadata (`isAdjusted`, `dataQuality.adjustmentPolicy`)
 - `TechnicalIndicatorSnapshot`: deterministic indicator rollup
 - `DataQualityWarning`: persisted warning metadata
+- `CorporateActionEvent`: imported corporate-action row with source id, dates, ratios/amounts, raw evidence, invalidation/processed metadata
+- `CorporateActionSyncRun`: import/sync run status and counts
 
 Current `Instrument` rows are resolved through the maintained Dhan scrip master when synced; broker snapshots remain a secondary hint only when the master has never synced. Lifecycle states (`ACTIVE`, `INACTIVE`, `DELISTED`, `RENAMED`) and ambiguous symbol matches fail closed in scanner/risk paths.
 
@@ -76,9 +78,12 @@ represent unavailable automated news or filing ingestion as complete.
 These concepts are not present in the current schema:
 
 - user-owned risk settings
-- corporate actions and candle-adjustment verification records
 - index/sector time series and market-regime snapshots
 - MCP credentials/allowlists, if a separate deployment later requires them
+
+Corporate-action **candle adjustment** is verified via Dhan provider-adjusted daily
+historical data. **Event catalogs** are persisted when imported through the admin
+API/CLI; automated NSE EOD CA sync is unavailable without a paid feed.
 
 Phase 11 stores MCP bearer credentials in `McpAccessToken` (hashed, per-user).
 Tool allowlisting remains code-defined in `apps/api/src/mcp/mcp.constants.ts`.

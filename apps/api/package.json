@@ -21,7 +21,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "legacy:assign-initial-admin": "tsx prisma/assign-legacy-to-initial-admin.ts",
     "mcp:issue-token": "tsx scripts/issue-mcp-token.ts",
-    "instrument-master:sync": "tsx scripts/sync-instrument-master.ts"
+    "instrument-master:sync": "tsx scripts/sync-instrument-master.ts",
+    "corporate-actions:import": "tsx scripts/import-corporate-actions.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

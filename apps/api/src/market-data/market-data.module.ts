@@ -1,6 +1,12 @@
 import { Module } from '@nestjs/common';
 import { DhanModule } from '../broker/dhan/dhan.module';
 import { CandlesService } from './candles.service';
+import { CorporateActionPolicyService } from './corporate-action-policy.service';
+import {
+  CorporateActionImportService,
+  CorporateActionInvalidationService,
+  CorporateActionSyncService,
+} from './corporate-action.service';
 import { DhanMarketDataProviderService } from './dhan-market-data-provider.service';
 import { IndicatorsService } from './indicators.service';
 import { InstrumentMasterMappingService } from './instrument-master-mapping.service';
@@ -24,6 +30,10 @@ import { PricesService } from './prices.service';
     CandlesService,
     IndicatorsService,
     MarketDataQualityService,
+    CorporateActionPolicyService,
+    CorporateActionInvalidationService,
+    CorporateActionImportService,
+    CorporateActionSyncService,
     InstrumentVerificationService,
     DhanMarketDataProviderService,
   ],
@@ -36,6 +46,8 @@ import { PricesService } from './prices.service';
     CandlesService,
     IndicatorsService,
     MarketDataQualityService,
+    CorporateActionPolicyService,
+    CorporateActionSyncService,
     InstrumentVerificationService,
     DhanMarketDataProviderService,
   ],

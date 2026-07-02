@@ -1,8 +1,17 @@
-import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+  Body,
+} from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
 import { AdminGuard } from '../auth/admin.guard';
+import { corporateActionImportSchema } from './corporate-action.dto';
 import { MarketDataService } from './market-data.service';
 
 @Controller('market-data')
@@ -26,6 +35,24 @@ export class MarketDataController {
     return this.marketDataService.syncInstrumentMaster({
       force: force === 'true',
     });
+  }
+
+  @Get('corporate-actions/status')
+  getCorporateActionStatus() {
+    return this.marketDataService.getCorporateActionStatus();
+  }
+
+  @Post('sync/corporate-actions')
+  @UseGuards(AdminGuard)
+  syncCorporateActions() {
+    return this.marketDataService.syncCorporateActions();
+  }
+
+  @Post('sync/corporate-actions/import')
+  @UseGuards(AdminGuard)
+  importCorporateActions(@Body() body: unknown) {
+    const parsed = corporateActionImportSchema.parse(body);
+    return this.marketDataService.importCorporateActions(parsed.events);
   }
 
   @Get('instruments/:symbol')

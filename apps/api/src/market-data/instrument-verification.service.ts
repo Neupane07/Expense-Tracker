@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  MappingStatus,
-  QualitySignals,
-  ReadinessStatus,
-} from '../common/data-quality';
+import type { MappingStatus, QualitySignals } from '../common/data-quality';
 import { InstrumentLifecycleStatus } from '../generated/prisma/client';
+import {
+  DHAN_CANDLE_ADJUSTMENT_POLICY,
+  DHAN_MARKET_DATA_SOURCE,
+} from './corporate-action.constants';
 import { DHAN_SCRIP_MASTER_SOURCE } from './instrument-master.constants';
+import {
+  CorporateActionPolicyService,
+  type CandleAdjustmentInput,
+  type CorporateActionAdjustmentStatus,
+  type CorporateActionPolicyResult,
+} from './corporate-action-policy.service';
 import type { InstrumentMappingResolution } from './instrument-master-mapping.service';
 
 export type InstrumentVerificationStatus = {
@@ -23,29 +29,21 @@ export type InstrumentVerificationStatus = {
   precedenceRule: string | null;
 };
 
-export type CorporateActionAdjustmentStatus =
-  | 'VERIFIED'
-  | 'UNVERIFIED'
-  | 'NOT_APPLICABLE';
-
-export type CorporateActionPolicyResult = {
-  adjustmentStatus: CorporateActionAdjustmentStatus;
-  providerAvailable: false;
-  blocksHistoricalAnalysis: boolean;
-  status: ReadinessStatus;
-  warnings: string[];
-  blockers: string[];
-};
+export type { CorporateActionAdjustmentStatus, CorporateActionPolicyResult };
 
 /**
  * Instrument mapping and corporate-action readiness policy.
  *
- * There is no corporate-action ingestion provider in Finance OS today. Candle
- * rows may carry `isAdjusted`, but that flag is not independently verified.
- * Operations that depend on split/bonus-adjusted history must fail closed.
+ * Daily candle adjustment is verified through Dhan's official provider-adjusted
+ * daily historical API. Corporate-action event catalogs require a separate
+ * licensed/import path; automated NSE EOD CA sync remains unavailable.
  */
 @Injectable()
 export class InstrumentVerificationService {
+  constructor(
+    private readonly corporateActionPolicy: CorporateActionPolicyService,
+  ) {}
+
   evaluateInstrumentMapping(input: {
     symbol: string;
     securityId: string | null;
@@ -165,43 +163,27 @@ export class InstrumentVerificationService {
     candleCount: number;
     unadjustedCount: number;
     providerClaimsAdjusted?: boolean;
+    candles?: CandleAdjustmentInput[];
+    events?: Parameters<
+      CorporateActionPolicyService['evaluatePolicy']
+    >[0]['events'];
+    lastSuccessfulEventSyncAt?: Date | null;
+    asOf?: Date;
   }): CorporateActionPolicyResult {
-    const warnings: string[] = [];
-    const blockers: string[] = [];
+    const candles =
+      input.candles ??
+      this.deriveCandlesFromCounts(
+        input.candleCount,
+        input.unadjustedCount,
+        input.providerClaimsAdjusted,
+      );
 
-    if (input.candleCount === 0) {
-      return {
-        adjustmentStatus: 'NOT_APPLICABLE',
-        providerAvailable: false,
-        blocksHistoricalAnalysis: true,
-        status: 'BLOCKED',
-        warnings: ['CANDLES_MISSING'],
-        blockers: ['CANDLES_MISSING'],
-      };
-    }
-
-    if (input.providerClaimsAdjusted) {
-      return {
-        adjustmentStatus: 'VERIFIED',
-        providerAvailable: false,
-        blocksHistoricalAnalysis: false,
-        status: 'READY',
-        warnings,
-        blockers,
-      };
-    }
-
-    warnings.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
-    blockers.push('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED');
-
-    return {
-      adjustmentStatus: 'UNVERIFIED',
-      providerAvailable: false,
-      blocksHistoricalAnalysis: true,
-      status: 'BLOCKED',
-      warnings,
-      blockers,
-    };
+    return this.corporateActionPolicy.evaluatePolicy({
+      candles,
+      events: input.events,
+      lastSuccessfulEventSyncAt: input.lastSuccessfulEventSyncAt,
+      asOf: input.asOf,
+    });
   }
 
   historicalAnalysisBlockers(
@@ -216,5 +198,26 @@ export class InstrumentVerificationService {
       rejectReasons: [],
       blockers: policy.blockers,
     };
+  }
+
+  private deriveCandlesFromCounts(
+    candleCount: number,
+    unadjustedCount: number,
+    providerClaimsAdjusted?: boolean,
+  ): CandleAdjustmentInput[] {
+    const adjustedCount = Math.max(0, candleCount - unadjustedCount);
+
+    return Array.from({ length: candleCount }, (_, index) => {
+      const isAdjusted =
+        providerClaimsAdjusted === true && index < adjustedCount;
+
+      return {
+        source: DHAN_MARKET_DATA_SOURCE,
+        isAdjusted,
+        dataQuality: isAdjusted
+          ? { adjustmentPolicy: DHAN_CANDLE_ADJUSTMENT_POLICY }
+          : null,
+      };
+    });
   }
 }

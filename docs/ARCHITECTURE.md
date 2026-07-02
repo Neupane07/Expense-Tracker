@@ -107,7 +107,7 @@ The system follows fail-closed decision rules:
 - uncertain security mapping: reject
 - stale/missing required price: reject
 - missing required candles: reject
-- unknown corporate-action adjustment when history matters: reject
+- unknown corporate-action adjustment when history matters: reject (Dhan provider-adjusted daily candles verified; optional imported event catalog must not be stale or pending invalidation)
 - fallback/unofficial optional inputs: warn and cap confidence
 - missing portfolio/research context: disclose and avoid complete-confidence claims
 
@@ -165,7 +165,7 @@ Current:
 
 Partial or missing:
 
-- corporate actions
+- automated NSE/BSE corporate-action event feeds (paid/licensed; candle adjustment verified via Dhan daily historical API)
 - official filings
 - licensed/curated news
 - index, sector, global-cue, and flow data

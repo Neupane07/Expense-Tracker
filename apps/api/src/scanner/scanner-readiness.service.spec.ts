@@ -1,3 +1,5 @@
+import { CorporateActionPolicyService } from '../market-data/corporate-action-policy.service';
+import { CorporateActionSyncService } from '../market-data/corporate-action.service';
 import { InstrumentsService } from '../market-data/instruments.service';
 import { ScannerReadinessService } from './scanner-readiness.service';
 import { BrokerCredentialsService } from '../broker/broker-credentials.service';
@@ -30,7 +32,31 @@ describe('ScannerReadinessService', () => {
         }),
       } as unknown as BrokerCredentialsService,
       new MarketDataQualityService(),
-      new InstrumentVerificationService(),
+      new InstrumentVerificationService(new CorporateActionPolicyService()),
+      {
+        evaluateForInstrument: jest.fn(
+          (
+            _instrumentId,
+            candles: Array<{
+              source: string;
+              isAdjusted: boolean;
+              dataQuality?: unknown;
+            }>,
+          ) =>
+            Promise.resolve(
+              new CorporateActionPolicyService().evaluatePolicy({
+                candles: candles.map((candle) => ({
+                  source: candle.source,
+                  isAdjusted: candle.isAdjusted,
+                  dataQuality:
+                    candle.dataQuality && typeof candle.dataQuality === 'object'
+                      ? (candle.dataQuality as Record<string, unknown>)
+                      : null,
+                })),
+              }),
+            ),
+        ),
+      } as unknown as CorporateActionSyncService,
       {
         resolveMapping: jest.fn().mockResolvedValue({
           symbol: 'INFY',

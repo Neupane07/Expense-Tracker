@@ -96,7 +96,7 @@ Exit gate:
 
 ## Phase 12: Verified Data Breadth
 
-Status: In progress (12A complete)
+Status: In progress (12A and 12B complete)
 
 Scope candidates, in this order:
 
@@ -110,9 +110,18 @@ Status: Complete
 - deterministic mapping precedence, conflict diagnostics, lifecycle states
 - scanner/risk/readiness rejection for ambiguous, inactive, delisted, renamed, or conflicting mappings
 
+### Phase 12B: Corporate-action-aware historical validation
+
+Status: Complete
+
+- Dhan provider-adjusted daily candle policy (`DHAN_PROVIDER_DAILY_ADJUSTED`)
+- `CorporateActionEvent` + `CorporateActionSyncRun` models with raw evidence and sync metadata
+- structured admin/CLI event import for official exports; automated NSE EOD CA sync documented as unavailable (paid feed)
+- deterministic adjustment validation, affected-range candle invalidation, and indicator recalculation gates
+- scanner/readiness/tools reject unverified adjustment, pending invalidation, or stale event catalog when configured
+
 ### Remaining Phase 12 scope
 
-- corporate-action-aware candle adjustment/validation
 - licensed or official filing ingestion
 - curated/official news ingestion
 - sector/index data, relative strength, and market regime

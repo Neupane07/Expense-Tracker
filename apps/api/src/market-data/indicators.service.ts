@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -6,6 +6,7 @@ import {
   type IndicatorCandle,
 } from './indicator-calculations';
 import { CandlesService } from './candles.service';
+import { CorporateActionSyncService } from './corporate-action.service';
 import { InstrumentsService } from './instruments.service';
 
 type DecimalLike = {
@@ -18,6 +19,7 @@ export class IndicatorsService {
     private readonly prisma: PrismaService,
     private readonly instruments: InstrumentsService,
     private readonly candles: CandlesService,
+    private readonly corporateActions: CorporateActionSyncService,
   ) {}
 
   async getLatest(userId: string, symbol: string) {
@@ -44,6 +46,22 @@ export class IndicatorsService {
 
   async recalculate(userId: string, symbol: string) {
     const instrument = await this.instruments.findBySymbol(userId, symbol);
+    const storedCandles = await this.prisma.dailyCandle.findMany({
+      where: { instrumentId: instrument.id },
+      select: { source: true, isAdjusted: true, dataQuality: true },
+      orderBy: { date: 'asc' },
+    });
+    const policy = await this.corporateActions.evaluateForInstrument(
+      instrument.id,
+      storedCandles,
+    );
+
+    if (policy.blocksHistoricalAnalysis) {
+      throw new BadRequestException(
+        `Corporate-action adjustment is not verified for ${symbol}; indicators cannot be recalculated.`,
+      );
+    }
+
     const candleResponse = await this.candles.getCandlesForIndicators(
       userId,
       symbol,

@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CorporateActionPolicyService } from './corporate-action-policy.service';
+import { DHAN_CANDLE_ADJUSTMENT_POLICY } from './corporate-action.constants';
 import { DhanMarketDataProviderService } from './dhan-market-data-provider.service';
 import { InstrumentsService } from './instruments.service';
 import { MarketDataQualityService } from './market-data-quality.service';
@@ -15,6 +17,7 @@ export class CandlesService {
     private readonly instruments: InstrumentsService,
     private readonly provider: DhanMarketDataProviderService,
     private readonly quality: MarketDataQualityService,
+    private readonly corporateActionPolicy: CorporateActionPolicyService,
   ) {}
 
   async getDailyCandles(
@@ -43,6 +46,12 @@ export class CandlesService {
           continue;
         }
 
+        const verifiedAt = new Date();
+        const dataQuality =
+          this.corporateActionPolicy.buildCandleAdjustmentDataQuality(
+            verifiedAt,
+          );
+
         await this.prisma.dailyCandle.upsert({
           where: {
             instrumentId_date_source: {
@@ -62,7 +71,7 @@ export class CandlesService {
               candle.volume == null ? null : BigInt(Math.trunc(candle.volume)),
             source: candle.source,
             isAdjusted: candle.isAdjusted,
-            dataQuality: { confidence: 'HIGH' },
+            dataQuality,
             warnings: [],
             rawPayload: candle.rawPayload,
           },
@@ -74,7 +83,7 @@ export class CandlesService {
             volume:
               candle.volume == null ? null : BigInt(Math.trunc(candle.volume)),
             isAdjusted: candle.isAdjusted,
-            dataQuality: { confidence: 'HIGH' },
+            dataQuality,
             warnings: [],
             rawPayload: candle.rawPayload,
           },
@@ -135,6 +144,7 @@ export class CandlesService {
     volume: bigint | null;
     source: string;
     isAdjusted: boolean;
+    dataQuality?: unknown;
     warnings: string[];
   }) {
     return {
@@ -147,6 +157,17 @@ export class CandlesService {
       volume: candle.volume == null ? null : Number(candle.volume),
       source: candle.source,
       isAdjusted: candle.isAdjusted,
+      adjustmentPolicy:
+        typeof candle.dataQuality === 'object' &&
+        candle.dataQuality != null &&
+        'adjustmentPolicy' in candle.dataQuality
+          ? String(
+              (candle.dataQuality as { adjustmentPolicy?: string })
+                .adjustmentPolicy,
+            )
+          : candle.isAdjusted
+            ? DHAN_CANDLE_ADJUSTMENT_POLICY
+            : null,
       warnings: candle.warnings,
     };
   }

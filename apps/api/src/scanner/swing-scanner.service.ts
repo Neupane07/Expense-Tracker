@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PortfolioAssetClass } from '../generated/prisma/client';
 import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
+import { CorporateActionSyncService } from '../market-data/corporate-action.service';
 import { CandlesService } from '../market-data/candles.service';
 import { IndicatorsService } from '../market-data/indicators.service';
 import { InstrumentsService } from '../market-data/instruments.service';
@@ -107,6 +108,7 @@ export class SwingScannerService {
     private readonly researchSnapshots: ResearchSnapshotService,
     private readonly readiness: ScannerReadinessService,
     private readonly instrumentVerification: InstrumentVerificationService,
+    private readonly corporateActions: CorporateActionSyncService,
   ) {}
 
   async runScan(
@@ -421,13 +423,16 @@ export class SwingScannerService {
     }
 
     const corporateActionPolicy =
-      this.instrumentVerification.evaluateCorporateActionPolicy({
-        candleCount: candleResponse.candles.length,
-        unadjustedCount: candleResponse.candles.filter(
-          (candle) => !candle.isAdjusted,
-        ).length,
-        providerClaimsAdjusted: false,
-      });
+      await this.corporateActions.evaluateForInstrument(
+        instrument.id,
+        candleResponse.candles.map((candle) => ({
+          source: candle.source,
+          isAdjusted: candle.isAdjusted,
+          dataQuality: candle.adjustmentPolicy
+            ? { adjustmentPolicy: candle.adjustmentPolicy }
+            : null,
+        })),
+      );
 
     if (corporateActionPolicy.blocksHistoricalAnalysis) {
       return [

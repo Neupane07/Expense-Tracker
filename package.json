@@ -11,7 +11,8 @@
     "test": "pnpm --filter api test && pnpm --filter api test:e2e && pnpm --filter web test",
     "build": "pnpm -r build",
     "mcp:issue-token": "pnpm --filter api exec tsx scripts/issue-mcp-token.ts",
-    "instrument-master:sync": "pnpm --filter api exec tsx scripts/sync-instrument-master.ts"
+    "instrument-master:sync": "pnpm --filter api exec tsx scripts/sync-instrument-master.ts",
+    "corporate-actions:import": "pnpm --filter api exec tsx scripts/import-corporate-actions.ts"
   },
   "packageManager": "pnpm@11.1.2"
 }

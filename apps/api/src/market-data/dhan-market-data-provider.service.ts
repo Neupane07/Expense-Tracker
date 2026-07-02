@@ -161,7 +161,8 @@ export class DhanMarketDataProviderService {
       close: response.close?.[index] ?? 0,
       volume: response.volume?.[index] ?? null,
       source: this.source,
-      isAdjusted: false,
+      isAdjusted: true,
+      adjustmentPolicy: 'DHAN_PROVIDER_DAILY_ADJUSTED',
       rawPayload: {
         timestamp,
         open: response.open?.[index],

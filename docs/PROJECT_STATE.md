@@ -24,8 +24,10 @@ callable over authenticated `/tools` endpoints. The browser Tool Tester at
 Phase 11 read-only MCP adapter is implemented at `POST /mcp` with bearer-token
 auth, allowlisted tool exposure, and the same executor/audit path as `/tools`.
 Phase 12A instrument master sync and lifecycle-aware symbol mapping are
-implemented using Dhan's official scrip-master CSV. Corporate-action ingestion,
-automated research sources, market regime/sector breadth, and broad scanner
+implemented using Dhan's official scrip-master CSV. Phase 12B corporate-action
+validation uses Dhan provider-adjusted daily candles plus optional structured
+event import; automated NSE event sync remains blocked pending a licensed feed.
+Automated research sources, market regime/sector breadth, and broad scanner
 universe expansion remain open.
 
 ## Implemented
@@ -60,6 +62,9 @@ universe expansion remain open.
 - lifecycle-aware symbol mapping (`ACTIVE`, `INACTIVE`, `DELISTED`, `RENAMED`) with explicit conflict diagnostics
 - scanner/risk/readiness rejection for ambiguous, inactive, delisted, renamed, or broker/master identifier conflicts
 - instrument records resolved from master first; broker snapshots are hints only before the first master sync
+- Dhan provider-adjusted daily candles with explicit `DHAN_PROVIDER_DAILY_ADJUSTED` verification metadata on stored rows
+- corporate-action event persistence (`CorporateActionEvent`, `CorporateActionSyncRun`) with structured admin/CLI import, deduplication, corrections, and affected-range invalidation
+- automated NSE EOD corporate-action event sync documented as unavailable (paid SFTP subscription); candle adjustment verified via Dhan official daily historical API
 - Dhan latest-price and historical daily-candle reads
 - stored prices, candles, indicators, and quality warnings
 - SMA 20/50/200, RSI 14, ATR 14, volume average/ratio, SMA-50 distance
@@ -115,7 +120,7 @@ universe expansion remain open.
 
 - Dhan official `api-scrip-master-detailed.csv` backs a global `InstrumentMasterEntry` table with sync runs, raw row metadata, and lifecycle status.
 - `InstrumentVerificationService` and `InstrumentMasterMappingService` enforce mapping precedence and fail closed on ambiguity, inactive/delisted symbols, renames, and broker/master identifier conflicts.
-- `InstrumentVerificationService` documents corporate-action adjustment policy and blocks history-dependent operations when corporate-action adjustment cannot be verified. No corporate-action provider exists yet.
+- `CorporateActionPolicyService` verifies Dhan provider-adjusted daily candles and optional imported event catalogs; blocks history-dependent paths when adjustment is unverified, invalidation is pending, or configured event sync is stale.
 - Instrument `sector` and `industry` fields exist but no authoritative enrichment
   pipeline is present.
 - 52-week distance, relative strength, index/sector series, liquidity screens,
@@ -169,7 +174,7 @@ universe expansion remain open.
 
 ## Missing
 
-- corporate-action ingestion pipelines
+- automated NSE/BSE corporate-action event feed (paid/licensed)
 - official/licensed filing and news ingestion
 - market regime, index/sector strength, and broad scanner universe
 
@@ -219,15 +224,16 @@ by this repository.
 - expenses: `Account`, `Import`, `Transaction`, `TransactionCategory`, `Rule`
 - broker: account/connection/credential and holding/position/order/trade/fund snapshots
 - portfolio: mutual-fund holdings/NAV and portfolio snapshots
-- market data: instrument master entries/sync runs, instrument, price, daily candle, indicator, data-quality warning
+- market data: instrument master entries/sync runs, corporate-action events/sync runs, instrument, price, daily candle, indicator, data-quality warning
 - scanner: `SwingScanRun`
 - journal: `TradeJournalEntry`
 - research: `ResearchItem`, `ResearchEvidence`, `ResearchSnapshot`
 - internal tools: `ToolExecutionAudit`
 
-No tool-definition catalog table, corporate-action, index/sector-series, or
+No tool-definition catalog table, index/sector-series, or
 user-risk-settings model exists. Tool definitions live in code via the registry
-service; audit rows store execution metadata only.
+service; audit rows store execution metadata only. Corporate-action events are
+persisted when imported via admin API/CLI; automated event sync is unavailable.
 
 ## Current API Surface
 
@@ -239,6 +245,9 @@ Implemented authenticated route groups:
 - `/market-data/*`
 - `/market-data/instrument-master/status`
 - `/market-data/sync/instrument-master` (admin only)
+- `/market-data/corporate-actions/status`
+- `/market-data/sync/corporate-actions` (admin only; records unavailable automated sync)
+- `/market-data/sync/corporate-actions/import` (admin only structured import)
 - `/risk/*`
 - `/scanner/swing/*`
 - `/scanner/readiness`
@@ -276,16 +285,17 @@ Remaining high-value gaps:
 
 ## Immediate Recommendation
 
-Continue Phase 12 verified data breadth. Phase 12B (corporate-action-aware
-historical validation) is next after instrument master (12A).
+Continue Phase 12 verified data breadth. Phase 12C (official filing ingestion)
+is next after corporate-action validation (12B).
 
 Recommended order:
 
 ```text
-Phase 12B corporate actions -> 12C filings -> 12D news -> 12E regime -> 12F scanner breadth
+Phase 12C filings -> 12D news -> 12E regime -> 12F scanner breadth
 ```
 
-Phases 10 (Tool Tester), 11 (MCP adapter), and 12A (instrument master) are complete.
+Phases 10 (Tool Tester), 11 (MCP adapter), 12A (instrument master), and 12B
+(corporate actions) are complete.
 
 ## Non-Negotiable Boundaries
 

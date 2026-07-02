@@ -63,6 +63,26 @@ enum InstrumentMasterSyncStatus {
   FAILED
 }
 
+enum CorporateActionEventType {
+  SPLIT
+  BONUS
+  DIVIDEND
+  RIGHTS
+  SYMBOL_CHANGE
+  MERGER
+  DEMERGER
+  BUYBACK
+  OTHER
+}
+
+enum CorporateActionSyncStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+  UNAVAILABLE
+}
+
 enum PortfolioAssetClass {
   STOCK
   ETF
@@ -579,6 +599,60 @@ model InstrumentMasterSyncRun {
   @@index([status])
 }
 
+model CorporateActionSyncRun {
+  id             String                    @id @default(cuid())
+  status         CorporateActionSyncStatus
+  source         String
+  startedAt      DateTime                  @default(now())
+  completedAt    DateTime?
+  eventCount     Int                       @default(0)
+  importedCount  Int                       @default(0)
+  skippedCount   Int                       @default(0)
+  correctedCount Int                       @default(0)
+  errorMessage   String?
+  rawMetadata    Json?
+  events         CorporateActionEvent[]
+  createdAt      DateTime                  @default(now())
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+model CorporateActionEvent {
+  id                   String                   @id @default(cuid())
+  instrumentId         String?
+  instrument           Instrument?              @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  symbol               String
+  exchange             String
+  securityId           String?
+  eventType            CorporateActionEventType
+  effectiveDate        DateTime
+  exDate               DateTime?
+  recordDate           DateTime?
+  ratioNumerator       Decimal?                 @db.Decimal(18, 6)
+  ratioDenominator     Decimal?                 @db.Decimal(18, 6)
+  cashAmount           Decimal?                 @db.Decimal(18, 4)
+  source               String
+  sourceEventId        String
+  rawEvidence          Json
+  invalidationFromDate DateTime?
+  processedAt          DateTime?
+  supersededAt         DateTime?
+  supersededById       String?
+  supersededBy         CorporateActionEvent?    @relation("CorporateActionCorrection", fields: [supersededById], references: [id], onDelete: SetNull)
+  corrections          CorporateActionEvent[]   @relation("CorporateActionCorrection")
+  syncRunId            String?
+  syncRun              CorporateActionSyncRun?  @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@unique([source, sourceEventId])
+  @@index([instrumentId, exDate])
+  @@index([symbol, exchange, effectiveDate])
+  @@index([processedAt])
+  @@index([supersededAt])
+}
+
 model Instrument {
   id                  String                       @id @default(cuid())
   symbol              String
@@ -601,6 +675,7 @@ model Instrument {
   dataQualityWarnings DataQualityWarning[]
   researchItems       ResearchItem[]
   researchSnapshots   ResearchSnapshot[]
+  corporateActionEvents CorporateActionEvent[]
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt
 

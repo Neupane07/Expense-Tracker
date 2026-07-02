@@ -1,4 +1,5 @@
 import { CandlesService } from './candles.service';
+import { CorporateActionPolicyService } from './corporate-action-policy.service';
 import { MarketDataQualityService } from './market-data-quality.service';
 
 describe('MarketDataQualityService', () => {
@@ -52,6 +53,7 @@ describe('CandlesService missing candle handling', () => {
       instruments as never,
       { source: 'DHAN' } as never,
       new MarketDataQualityService(),
+      new CorporateActionPolicyService(),
     );
 
     const response = await service.getDailyCandles('user-1', 'INFY');

@@ -73,6 +73,14 @@ and Tool Tester, not direct MCP implementation.
 - added instrument verification and corporate-action readiness policy
 - added authenticated Finance OS e2e tests and focused web Vitest coverage
 
+### 2026-07-02: Phase 12B corporate-action validation
+
+- added `CorporateActionEvent` and `CorporateActionSyncRun` models
+- Dhan provider-adjusted daily candle verification metadata on `DailyCandle`
+- structured admin/CLI corporate-action event import with deduplication and corrections
+- affected-range candle invalidation and indicator recalculation gates
+- scanner/readiness/tool rejection for unverified adjustment or pending invalidation
+
 ## Corrections to Earlier Plans
 
 - Research is not the next unimplemented phase; its manual evidence foundation

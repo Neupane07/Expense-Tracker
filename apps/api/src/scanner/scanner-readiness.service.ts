@@ -14,6 +14,7 @@ import {
 import { BrokerCredentialsService } from '../broker/broker-credentials.service';
 import { MarketDataQualityService } from '../market-data/market-data-quality.service';
 import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
+import { CorporateActionSyncService } from '../market-data/corporate-action.service';
 import { InstrumentsService } from '../market-data/instruments.service';
 import { ResearchSnapshotService } from '../research/research-snapshot.service';
 
@@ -32,6 +33,7 @@ export class ScannerReadinessService {
     private readonly brokerCredentials: BrokerCredentialsService,
     private readonly marketQuality: MarketDataQualityService,
     private readonly instrumentVerification: InstrumentVerificationService,
+    private readonly corporateActions: CorporateActionSyncService,
     private readonly instruments: InstrumentsService,
     private readonly researchSnapshots: ResearchSnapshotService,
   ) {}
@@ -307,7 +309,12 @@ export class ScannerReadinessService {
 
     const candles = await this.prisma.dailyCandle.findMany({
       where: { instrumentId },
-      select: { isAdjusted: true, date: true, source: true },
+      select: {
+        isAdjusted: true,
+        date: true,
+        source: true,
+        dataQuality: true,
+      },
       orderBy: { date: 'desc' },
       take: 250,
     });
@@ -317,12 +324,11 @@ export class ScannerReadinessService {
       blockers.push('CANDLES_MISSING');
     }
 
-    const corporateAction =
-      this.instrumentVerification.evaluateCorporateActionPolicy({
-        candleCount: candles.length,
-        unadjustedCount: candles.filter((candle) => !candle.isAdjusted).length,
-        providerClaimsAdjusted: false,
-      });
+    const corporateAction = await this.corporateActions.evaluateForInstrument(
+      instrumentId,
+      candles,
+      asOf,
+    );
     warnings.push(...corporateAction.warnings);
     blockers.push(...corporateAction.blockers);
     details.corporateAction = corporateAction;

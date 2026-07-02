@@ -3,6 +3,7 @@ import { ToolRegistrationService } from './tool-registration.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PortfolioService } from '../portfolio/portfolio.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CorporateActionPolicyService } from '../market-data/corporate-action-policy.service';
 import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
 import { MarketDataQualityService } from '../market-data/market-data-quality.service';
 import { InstrumentsService } from '../market-data/instruments.service';
@@ -46,7 +47,9 @@ describe('ToolRegistrationService', () => {
         { provide: MarketDataQualityService, useValue: {} },
         {
           provide: InstrumentVerificationService,
-          useValue: new InstrumentVerificationService(),
+          useValue: new InstrumentVerificationService(
+            new CorporateActionPolicyService(),
+          ),
         },
         { provide: ScannerReadinessService, useValue: {} },
         { provide: SwingScannerService, useValue: {} },

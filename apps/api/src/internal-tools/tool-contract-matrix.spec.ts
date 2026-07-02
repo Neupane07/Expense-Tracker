@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { CorporateActionPolicyService } from '../market-data/corporate-action-policy.service';
 import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
 import { CandlesService } from '../market-data/candles.service';
 import { IndicatorsService } from '../market-data/indicators.service';
@@ -21,7 +22,9 @@ const context = {
 };
 
 describe('Market data and deep-dive tool contracts', () => {
-  const instrumentVerification = new InstrumentVerificationService();
+  const instrumentVerification = new InstrumentVerificationService(
+    new CorporateActionPolicyService(),
+  );
 
   it('get_market_data_status blocks unverified corporate-action history', async () => {
     const indicatorsGetLatest = jest.fn().mockResolvedValue({

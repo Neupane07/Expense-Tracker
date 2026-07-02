@@ -73,15 +73,46 @@ Phase 12A maintains a global Dhan scrip-master (`api-scrip-master-detailed.csv`)
 
 ## Corporate-Action Adjustment Policy
 
-There is no corporate-action ingestion provider in Finance OS today. Stored daily
-candles may include `isAdjusted`, but that flag is not independently verified.
+Phase 12B verifies historical data through two layers:
 
-Policy:
+1. **Candle adjustment (available):** Dhan official daily historical API
+   (`POST /charts/historical`) returns corporate-action-adjusted OHLC per Dhan
+   support documentation. Stored `DailyCandle` rows from `DHAN` are marked
+   `isAdjusted: true` with `dataQuality.adjustmentPolicy =
+   DHAN_PROVIDER_DAILY_ADJUSTED` and `adjustmentVerifiedAt` at ingest time.
+   Finance OS does not infer splits/bonuses from price gaps.
 
-- if adjustment cannot be verified, block history-dependent operations such as
-  scanner readiness technical checks and indicator-dependent validation
-- emit `CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED`
-- do not claim a corporate-action provider exists
+2. **Event catalog (optional/imported):** `CorporateActionEvent` rows may be
+   imported via `POST /market-data/sync/corporate-actions/import` (admin) or
+   `pnpm corporate-actions:import -- --file=events.json` from structured official
+   exports. Automated NSE EOD Corporate Announcement sync is **unavailable**
+   without a paid SFTP subscription (`NSE_EOD_CA_SUBSCRIPTION_REQUIRED`).
+
+Deterministic validation rules:
+
+| Condition | Result |
+| --- | --- |
+| No candles | `CANDLES_MISSING` — block |
+| Candles not all `DHAN` + `DHAN_PROVIDER_DAILY_ADJUSTED` | `CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED` — block |
+| Price-affecting imported event not processed | `CORPORATE_ACTION_PENDING_INVALIDATION` — block |
+| Imported catalog present and last successful sync older than 30 days | `CORPORATE_ACTION_SYNC_STALE` — block |
+| Verified adjustment and no blocking event state | history-dependent paths allowed |
+
+On import of price-affecting events (split, bonus, rights, merger, demerger,
+symbol change): delete stored candles with `date < exDate` (or `effectiveDate`
+when `exDate` absent) and delete indicator snapshots for the instrument; require
+explicit indicator recalculation.
+
+Status endpoints:
+
+- `GET /market-data/corporate-actions/status`
+- `POST /market-data/sync/corporate-actions` — records unavailable automated sync (admin)
+- `POST /market-data/sync/corporate-actions/import` — structured import (admin)
+
+Scanner readiness, swing scan, indicator recalculation, and internal tools block
+with `HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT` when adjustment cannot
+be verified. Dividends are stored when imported but do not invalidate OHLC
+history.
 
 Every latest price must include:
 

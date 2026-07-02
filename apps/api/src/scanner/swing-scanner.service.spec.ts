@@ -53,12 +53,23 @@ describe('SwingScannerService', () => {
     validation?: unknown;
     researchStatus?: unknown;
     readiness?: unknown;
-    corporateActionPolicy?: () => {
-      blocksHistoricalAnalysis: boolean;
-      blockers: string[];
-      warnings: string[];
-      status: string;
-    };
+    corporateActionPolicy?: () =>
+      | {
+          blocksHistoricalAnalysis: boolean;
+          blockers: string[];
+          warnings: string[];
+          status: string;
+          adjustmentStatus?: string;
+          providerAvailable?: boolean;
+        }
+      | Promise<{
+          blocksHistoricalAnalysis: boolean;
+          blockers: string[];
+          warnings: string[];
+          status: string;
+          adjustmentStatus?: string;
+          providerAvailable?: boolean;
+        }>;
   }) {
     const prisma = {
       brokerHoldingSnapshot: {
@@ -230,8 +241,23 @@ describe('SwingScannerService', () => {
             warnings: [],
             status: 'READY',
             adjustmentStatus: 'VERIFIED',
-            providerAvailable: false,
+            providerAvailable: true,
           })),
+      ),
+    };
+    const corporateActionResult =
+      overrides?.corporateActionPolicy ??
+      (() => ({
+        blocksHistoricalAnalysis: false,
+        blockers: [] as string[],
+        warnings: [] as string[],
+        status: 'READY',
+        adjustmentStatus: 'VERIFIED',
+        providerAvailable: true,
+      }));
+    const corporateActions = {
+      evaluateForInstrument: jest.fn(() =>
+        Promise.resolve(corporateActionResult()),
       ),
     };
 
@@ -248,6 +274,7 @@ describe('SwingScannerService', () => {
         researchSnapshots as never,
         readiness as never,
         instrumentVerification as never,
+        corporateActions as never,
       ),
       prisma,
       tradeValidation,

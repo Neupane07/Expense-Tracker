@@ -69,6 +69,78 @@ curl -i \
 
 Expect `source: "DHAN_SCRIP_MASTER"` and `dataQuality.mappingStatus: "VERIFIED"` when the symbol is uniquely active in the master.
 
+## Corporate-action tests (Phase 12B)
+
+Check provider and event-catalog status (any authenticated user):
+
+```bash
+curl -i \
+  -H "Cookie: expense_session=<session-cookie>" \
+  http://localhost:4000/market-data/corporate-actions/status
+```
+
+Expect `candleAdjustmentProvider.available: true` (Dhan) and
+`eventCatalogProvider.available: false` with blocker `NSE_EOD_CA_SUBSCRIPTION_REQUIRED`
+until a licensed feed or structured import is configured.
+
+Record unavailable automated event sync (admin only):
+
+```bash
+curl -i \
+  -X POST \
+  -H "Cookie: expense_session=<admin-session-cookie>" \
+  http://localhost:4000/market-data/sync/corporate-actions
+```
+
+Import structured official corporate-action events (admin only):
+
+```bash
+curl -i \
+  -X POST \
+  -H "Cookie: expense_session=<admin-session-cookie>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [{
+      "symbol": "INFY",
+      "exchange": "NSE",
+      "eventType": "SPLIT",
+      "effectiveDate": "2026-05-01",
+      "exDate": "2026-05-01",
+      "ratioNumerator": 2,
+      "ratioDenominator": 1,
+      "source": "NSE_EOD_CA",
+      "sourceEventId": "split-infy-2026-05-01",
+      "rawEvidence": { "note": "official export row" }
+    }]
+  }' \
+  http://localhost:4000/market-data/sync/corporate-actions/import
+```
+
+CLI equivalent:
+
+```bash
+pnpm corporate-actions:import -- --file=./events.json
+```
+
+After Dhan candle fetch, verify stored candles include adjustment metadata:
+
+```bash
+curl -i \
+  -H "Cookie: expense_session=<session-cookie>" \
+  "http://localhost:4000/market-data/candles/INFY?from=2025-06-01&to=2026-05-30"
+```
+
+Expect `isAdjusted: true`, `adjustmentPolicy: "DHAN_PROVIDER_DAILY_ADJUSTED"`,
+and warnings only when data is missing or unverified.
+
+Corporate-action readiness checks should show:
+
+- `CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED` when stored candles lack verified Dhan adjustment metadata
+- `CORPORATE_ACTION_PENDING_INVALIDATION` after importing a price-affecting event before invalidation completes
+- `CORPORATE_ACTION_SYNC_STALE` when an imported event catalog exists but last successful import is older than the configured threshold
+- `HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT` on scanner readiness when history cannot be trusted
+- indicator `POST .../indicators/recalculate/:symbol` rejected with `400` when adjustment is unverified
+
 ## Broker connection tests
 
 Set the API encryption key and Dhan callback URL before starting the server:
