@@ -469,7 +469,7 @@ pnpm dev:api
 Issue a bearer token for a signed-in user:
 
 ```bash
-cd apps/api && pnpm mcp:issue-token -- --userEmail you@example.com --label local-mcp
+pnpm mcp:issue-token --userEmail you@example.com --label local-mcp
 ```
 
 Store the returned `token` securely. Check readiness:

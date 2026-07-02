@@ -10,6 +10,7 @@ import {
   MCP_SERVER_VERSION,
 } from './mcp.constants';
 import { getMcpRequestContext } from './mcp-request-context';
+import { createMcpInputSchema } from './mcp-input-normalizer';
 import { McpToolBridgeService } from './mcp-tool-bridge.service';
 
 export type McpRuntimeSession = {
@@ -79,6 +80,7 @@ export class McpRuntimeService implements OnModuleDestroy {
         definition.name,
         {
           description: definition.description,
+          inputSchema: createMcpInputSchema(definition.inputSchema),
           annotations: {
             readOnlyHint: true,
             destructiveHint: false,
@@ -143,7 +145,7 @@ export class McpRuntimeService implements OnModuleDestroy {
       const envelope = await this.bridge.executeTool(
         context.user,
         toolName,
-        input ?? {},
+        input,
       );
 
       return {

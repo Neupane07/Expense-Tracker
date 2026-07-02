@@ -56,7 +56,10 @@ function sessionCookie(userId: string) {
 
 type McpJsonRpcBody = {
   result?: {
-    tools?: Array<{ name: string }>;
+    tools?: Array<{
+      name: string;
+      inputSchema?: Record<string, unknown>;
+    }>;
     structuredContent?: Record<string, unknown>;
     isError?: boolean;
     content?: Array<{ type: string; text: string }>;
@@ -336,6 +339,40 @@ describe('MCP read-only adapter (e2e)', () => {
 
     expect(names).toEqual([...MCP_ALLOWED_TOOL_NAMES].sort());
     expect(names).not.toContain('place_order');
+
+    const portfolioTool = tools.find(
+      (tool) => tool.name === 'get_portfolio_snapshot',
+    );
+    expect(portfolioTool?.inputSchema).toMatchObject({
+      type: 'object',
+      properties: {},
+    });
+  });
+
+  it('accepts MCP _meta metadata for empty-input tools', async () => {
+    await initializeMcpSession(app, MCP_TOKEN_A);
+
+    const response = await mcpRequest(app, MCP_TOKEN_A)
+      .send({
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'tools/call',
+        params: {
+          name: 'get_portfolio_snapshot',
+          arguments: {
+            _meta: { progressToken: 'codex-test' },
+          },
+        },
+      })
+      .expect(200);
+
+    const body = response.body as McpJsonRpcBody;
+    const envelope = body.result?.structuredContent as ToolEnvelopeBody;
+
+    expect(body.result?.isError).not.toBe(true);
+    expect(envelope.tool).toBe('get_portfolio_snapshot');
+    expect(envelope.status).not.toBe('rejected');
+    expect(envelope.rejectReasons ?? []).not.toContain('INVALID_INPUT');
   });
 
   it('executes an allowlisted tool and returns the standard envelope', async () => {
@@ -369,7 +406,7 @@ describe('MCP read-only adapter (e2e)', () => {
     expect(JSON.stringify(response.body)).not.toContain(MCP_TOKEN_A);
   });
 
-  it('returns rejected envelope semantics for invalid tool input', async () => {
+  it('returns rejected envelope semantics for invalid trade setup input', async () => {
     await initializeMcpSession(app, MCP_TOKEN_A);
 
     const response = await mcpRequest(app, MCP_TOKEN_A)
@@ -379,19 +416,24 @@ describe('MCP read-only adapter (e2e)', () => {
         method: 'tools/call',
         params: {
           name: 'validate_trade_setup',
-          arguments: { symbol: 'INFY' },
+          arguments: {
+            symbol: 'INFY',
+            side: 'BUY',
+            entry: 100,
+            target: 105,
+            stopLoss: 99,
+            product: 'DELIVERY',
+          },
         },
       })
       .expect(200);
 
     const body = response.body as McpJsonRpcBody;
-    const structured = body.result?.structuredContent as {
-      status: string;
-      rejectReasons: string[];
-    };
+    const structured = body.result?.structuredContent as ToolEnvelopeBody;
 
-    expect(structured.status).toBe('rejected');
-    expect(structured.rejectReasons).toContain('INVALID_INPUT');
+    expect(structured.tool).toBe('validate_trade_setup');
+    expect(structured.status).not.toBe('ok');
+    expect(structured.auditId).toBeTruthy();
   });
 
   it('matches direct /tools execute envelope for the same user and input', async () => {

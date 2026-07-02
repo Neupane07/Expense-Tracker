@@ -111,7 +111,7 @@ Authentication: **revocable bearer tokens** stored hashed in `McpAccessToken`,
 each mapped to exactly one `userId`. Issue tokens with:
 
 ```bash
-cd apps/api && pnpm mcp:issue-token -- --userEmail you@example.com --label cursor-local
+pnpm mcp:issue-token --userEmail you@example.com --label cursor-local
 ```
 
 Set `MCP_ENABLED=true` to enable the endpoint. Browser session cookies are
