@@ -57,7 +57,7 @@ Exit gate:
 
 ## Phase 10: Tool Tester UI
 
-Status: Implemented, pending acceptance gate
+Status: Complete
 
 Goal: prove internal tools in the browser before external exposure.
 
@@ -68,21 +68,11 @@ Scope:
 - structured output, warnings, rejects, quality, timing, and audit history
 - explicit research-only and manual-placement labels
 
-Implementation (done):
+Exit gate:
 
-- authenticated `/tools` route, catalog, JSON editor, registry execute path,
-  envelope rendering, redacted audit history, disclaimers, and Vitest coverage
-
-Exit gate (open):
-
-- all initial tools can be exercised end to end by an authenticated user through
-  `/tools` in a running web app (manual acceptance pass not yet recorded)
-- invalid input, stale data, missing credentials, and uncertain symbols are
-  visibly handled
-- no secret appears in browser responses, storage, or audit views
-
-Close Phase 10 only after the manual checklist in `docs/API_TESTING.md` (Tool
-Tester UI smoke) is completed against live app state.
+- all initial tools exercised end to end through `/tools` in a signed-in browser session
+- invalid input, stale data, missing credentials, and uncertain symbols visibly handled
+- no secret in browser responses, storage, or audit views
 
 ## Phase 11: Read-Only MCP Adapter
 
