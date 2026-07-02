@@ -8,7 +8,12 @@ export type DataFreshness = 'LIVE' | 'RECENT' | 'STALE' | 'MISSING';
 
 export type DataConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 
-export type MappingStatus = 'VERIFIED' | 'INFERRED' | 'UNVERIFIED' | 'MISSING';
+export type MappingStatus =
+  | 'VERIFIED'
+  | 'INFERRED'
+  | 'UNVERIFIED'
+  | 'MISSING'
+  | 'AMBIGUOUS';
 
 export type ReadinessStatus = 'READY' | 'DEGRADED' | 'BLOCKED';
 

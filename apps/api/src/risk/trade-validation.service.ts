@@ -17,7 +17,8 @@ export type LatestPriceResponse = {
     securityId?: string | null;
     instrumentType?: string;
     source?: string;
-    dataQuality?: PriceQuality;
+    lifecycleStatus?: string | null;
+    dataQuality?: PriceQuality & { mappingStatus?: string };
     warnings?: string[];
   };
   price?: {
@@ -187,6 +188,19 @@ export class TradeValidationService {
     } else if (
       !marketData.instrument.isActive ||
       !marketData.instrument.securityId
+    ) {
+      rejectReasons.push('SYMBOL_NOT_VERIFIED');
+    }
+
+    if (marketData?.instrument?.dataQuality?.mappingStatus === 'AMBIGUOUS') {
+      rejectReasons.push('INSTRUMENT_MAPPING_AMBIGUOUS');
+    }
+
+    const lifecycleStatus = marketData?.instrument?.lifecycleStatus;
+    if (
+      lifecycleStatus === 'INACTIVE' ||
+      lifecycleStatus === 'DELISTED' ||
+      lifecycleStatus === 'RENAMED'
     ) {
       rejectReasons.push('SYMBOL_NOT_VERIFIED');
     }

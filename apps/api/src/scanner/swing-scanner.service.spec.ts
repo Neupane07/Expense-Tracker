@@ -46,6 +46,7 @@ describe('SwingScannerService', () => {
   function createService(overrides?: {
     instrument?: unknown;
     instrumentError?: Error;
+    mappingResolution?: unknown;
     price?: unknown;
     candles?: unknown;
     indicators?: unknown;
@@ -82,6 +83,26 @@ describe('SwingScannerService', () => {
       },
     };
     const instruments = {
+      resolveMapping: jest.fn().mockResolvedValue(
+        overrides?.mappingResolution ?? {
+          symbol: 'INFY',
+          exchange: 'NSE',
+          securityId: '1594',
+          isin: null,
+          name: 'Infosys',
+          instrumentType: 'EQUITY',
+          lifecycleStatus: 'ACTIVE',
+          mappingStatus: 'INFERRED',
+          source: 'DHAN_HOLDINGS',
+          masterEntryId: null,
+          masterAsOf: null,
+          masterStale: true,
+          warnings: [],
+          blockers: [],
+          conflicts: [],
+          precedenceRule: 'broker_inferred_no_master',
+        },
+      ),
       findBySymbol: overrides?.instrumentError
         ? jest.fn().mockRejectedValue(overrides.instrumentError)
         : jest.fn().mockResolvedValue(
@@ -237,12 +258,32 @@ describe('SwingScannerService', () => {
 
   it('rejects unknown symbols without guessing securityId', async () => {
     const { service } = createService({
+      mappingResolution: {
+        symbol: 'UNKNOWN',
+        exchange: 'NSE',
+        securityId: null,
+        isin: null,
+        name: 'UNKNOWN',
+        instrumentType: 'EQUITY',
+        lifecycleStatus: null,
+        mappingStatus: 'MISSING',
+        source: null,
+        masterEntryId: null,
+        masterAsOf: null,
+        masterStale: true,
+        warnings: [],
+        blockers: ['INSTRUMENT_MAPPING_MISSING'],
+        conflicts: [],
+        precedenceRule: null,
+      },
       instrumentError: new NotFoundException('not mapped'),
     });
 
     const result = await service.runScan('user-1', { symbols: ['UNKNOWN'] });
 
-    expect(result.candidates[0]?.rejectReasons).toContain('UNKNOWN_SYMBOL');
+    expect(result.candidates[0]?.rejectReasons).toContain(
+      'INSTRUMENT_MAPPING_MISSING',
+    );
     expect(result.candidates[0]?.status).toBe('rejected');
   });
 

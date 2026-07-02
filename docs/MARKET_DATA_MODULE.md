@@ -60,8 +60,16 @@ Fields should eventually include:
 
 If symbol/security mapping is uncertain, trade validation must reject the setup.
 
+Phase 12A maintains a global Dhan scrip-master (`api-scrip-master-detailed.csv`):
+
+- sync via `POST /market-data/sync/instrument-master` (admin) or `pnpm instrument-master:sync`
+- status via `GET /market-data/instrument-master/status`
+- mapping precedence: master `securityId` (when broker hint present) → master `symbol+exchange` → broker inference only before first successful master sync
+- lifecycle states: `ACTIVE`, `INACTIVE`, `DELISTED`, `RENAMED`
+- ambiguous symbol matches and broker/master identifier conflicts reject without guessing
+
 `InstrumentVerificationService` classifies mapping as `VERIFIED`, `INFERRED`,
-`UNVERIFIED`, or `MISSING` and exposes readiness blockers for missing mapping.
+`UNVERIFIED`, `AMBIGUOUS`, or `MISSING` and exposes readiness blockers for missing mapping.
 
 ## Corporate-Action Adjustment Policy
 

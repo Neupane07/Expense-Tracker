@@ -2,12 +2,12 @@
 
 ## Snapshot
 
-Repository inspection date: 2026-07-01
+Repository inspection date: 2026-07-02
 
 Phase 8 current-state hardening is complete. Phase 9 internal read-only tools
-are complete on the backend. Phase 10 Tool Tester UI is implemented at
-authenticated `/tools`, but the phase acceptance gate remains open until a
-manual browser pass exercises all eight registry tools end to end.
+are complete on the backend. Phase 10 Tool Tester UI is complete: authenticated
+`/tools` manual acceptance passed in a live browser session (all eight registry
+tools, envelope rendering, error paths, redacted audits, disclaimers).
 
 ## Executive Summary
 
@@ -18,15 +18,15 @@ manual research foundations with browser pages and unit/e2e tests.
 
 The canonical internal read-only tool registry is implemented in the API with
 versioned schemas, execution audit persistence, and eight initial tools. It is
-callable over authenticated `/tools` endpoints. A browser Tool Tester UI at
-`/tools` calls the same registry path; manual acceptance of all eight tools is
-still pending.
+callable over authenticated `/tools` endpoints. The browser Tool Tester at
+`/tools` exercises the same registry path; manual acceptance is complete.
 
 Phase 11 read-only MCP adapter is implemented at `POST /mcp` with bearer-token
 auth, allowlisted tool exposure, and the same executor/audit path as `/tools`.
-Important domain gaps also remain in instrument-master coverage, corporate-action
-ingestion, automated research sources, market regime/sector breadth, and broad
-scanner universe expansion.
+Phase 12A instrument master sync and lifecycle-aware symbol mapping are
+implemented using Dhan's official scrip-master CSV. Corporate-action ingestion,
+automated research sources, market regime/sector breadth, and broad scanner
+universe expansion remain open.
 
 ## Implemented
 
@@ -56,7 +56,10 @@ scanner universe expansion.
 
 ### Market data and risk
 
-- instrument records resolved from known broker holdings/orders/trades
+- maintained global Dhan scrip-master ingestion with sync-run metadata and content-hash idempotency
+- lifecycle-aware symbol mapping (`ACTIVE`, `INACTIVE`, `DELISTED`, `RENAMED`) with explicit conflict diagnostics
+- scanner/risk/readiness rejection for ambiguous, inactive, delisted, renamed, or broker/master identifier conflicts
+- instrument records resolved from master first; broker snapshots are hints only before the first master sync
 - Dhan latest-price and historical daily-candle reads
 - stored prices, candles, indicators, and quality warnings
 - SMA 20/50/200, RSI 14, ATR 14, volume average/ratio, SMA-50 distance
@@ -87,7 +90,7 @@ scanner universe expansion.
 - read-only MCP adapter at `POST /mcp` with revocable bearer tokens, rate limits,
   allowlisted tool bridge, and `GET /health/mcp` readiness
 
-### Tool Tester UI (Phase 10 — code)
+### Tool Tester UI (Phase 10)
 
 - authenticated `/tools` route in Finance OS navigation
 - tool catalog with name, version, description, and read-only badge
@@ -99,17 +102,9 @@ scanner universe expansion.
 - research-only and manual Super Order draft disclaimers
 - Vitest coverage for catalog, JSON validation, envelope rendering, audits,
   disclaimers, and no browser-storage persistence
+- manual acceptance complete via live `/tools` browser pass (2026-07-02)
 
 ## Partial
-
-### Tool Tester acceptance (Phase 10)
-
-- Browser UI, routing, nav, tests, and build are in place (`/tools`).
-- **Acceptance gate open:** an authenticated user must manually run all eight
-  registered tools through `/tools` in a live web session and confirm envelope
-  shape, error paths, redacted audits, and disclaimers (see `docs/API_TESTING.md`).
-- Phase 10 must not be marked complete in roadmap/state docs until that pass is
-  recorded.
 
 ### Internal tools (Phase 9 backend)
 
@@ -118,12 +113,9 @@ scanner universe expansion.
 
 ### Instrument and market-data foundation
 
-- Instrument mapping is derived from the user's broker history. There is no
-  maintained Dhan/NSE/BSE security-master ingestion, inactive-symbol lifecycle,
-  or comprehensive tradable universe.
-- `InstrumentVerificationService` documents mapping status and blocks
-  history-dependent operations when corporate-action adjustment cannot be
-  verified. No corporate-action provider exists yet.
+- Dhan official `api-scrip-master-detailed.csv` backs a global `InstrumentMasterEntry` table with sync runs, raw row metadata, and lifecycle status.
+- `InstrumentVerificationService` and `InstrumentMasterMappingService` enforce mapping precedence and fail closed on ambiguity, inactive/delisted symbols, renames, and broker/master identifier conflicts.
+- `InstrumentVerificationService` documents corporate-action adjustment policy and blocks history-dependent operations when corporate-action adjustment cannot be verified. No corporate-action provider exists yet.
 - Instrument `sector` and `industry` fields exist but no authoritative enrichment
   pipeline is present.
 - 52-week distance, relative strength, index/sector series, liquidity screens,
@@ -177,8 +169,7 @@ scanner universe expansion.
 
 ## Missing
 
-- Tool Tester manual acceptance pass (Phase 10 exit gate)
-- instrument-master and corporate-action ingestion pipelines
+- corporate-action ingestion pipelines
 - official/licensed filing and news ingestion
 - market regime, index/sector strength, and broad scanner universe
 
@@ -220,7 +211,7 @@ by this repository.
 /admin/invitations
 ```
 
-`/tools` — Tool Tester (Phase 10)
+`/tools` — Tool Tester (Phase 10, complete)
 
 ## Current Database Areas
 
@@ -228,7 +219,7 @@ by this repository.
 - expenses: `Account`, `Import`, `Transaction`, `TransactionCategory`, `Rule`
 - broker: account/connection/credential and holding/position/order/trade/fund snapshots
 - portfolio: mutual-fund holdings/NAV and portfolio snapshots
-- market data: instrument, price, daily candle, indicator, data-quality warning
+- market data: instrument master entries/sync runs, instrument, price, daily candle, indicator, data-quality warning
 - scanner: `SwingScanRun`
 - journal: `TradeJournalEntry`
 - research: `ResearchItem`, `ResearchEvidence`, `ResearchSnapshot`
@@ -246,6 +237,8 @@ Implemented authenticated route groups:
 - `/broker/dhan/*`
 - `/portfolio/*`
 - `/market-data/*`
+- `/market-data/instrument-master/status`
+- `/market-data/sync/instrument-master` (admin only)
 - `/risk/*`
 - `/scanner/swing/*`
 - `/scanner/readiness`
@@ -279,23 +272,20 @@ Remaining high-value gaps:
 
 - broader authenticated API e2e coverage across portfolio/market-data/research
 - controller/DTO validation contracts
-- Tool Tester UI Vitest coverage — in `apps/web`; manual `/tools` acceptance
-  pass still required for Phase 10 closure
 - deployment/security tests for MCP — implemented in `apps/api/test/mcp.e2e-spec.ts`
 
 ## Immediate Recommendation
 
-Complete the Phase 10 manual acceptance checklist in `docs/API_TESTING.md`
-(exercise all eight tools through `/tools` in a signed-in browser session).
-Only then mark Phase 10 complete and start Phase 11 (read-only MCP adapter).
+Continue Phase 12 verified data breadth. Phase 12B (corporate-action-aware
+historical validation) is next after instrument master (12A).
 
 Recommended order:
 
 ```text
-Tool Tester acceptance (open) -> provider/data breadth (Phase 12)
+Phase 12B corporate actions -> 12C filings -> 12D news -> 12E regime -> 12F scanner breadth
 ```
 
-Phase 11 MCP adapter is complete.
+Phases 10 (Tool Tester), 11 (MCP adapter), and 12A (instrument master) are complete.
 
 ## Non-Negotiable Boundaries
 

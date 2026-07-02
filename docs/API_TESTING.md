@@ -3,8 +3,10 @@
 ## Auth
 
 1. Login through browser.
-2. Copy session cookie.
-3. Use cookie in Postman/curl.
+2. Copy the `expense_session` HttpOnly cookie (default name from `AuthService`).
+3. Use it in Postman/curl as `Cookie: expense_session=<opaque-token>`.
+
+If `SESSION_COOKIE_NAME` is set in the API environment, use that name instead.
 
 ## Portfolio tests
 
@@ -28,6 +30,45 @@
 - POST /portfolio/sync/amfi-nav
 - GET /portfolio/snapshot
 
+## Instrument master tests (Phase 12A)
+
+Prerequisites: API running, database migrated, admin session cookie.
+
+Check sync status (any authenticated user):
+
+```bash
+curl -i \
+  -H "Cookie: expense_session=<session-cookie>" \
+  http://localhost:4000/market-data/instrument-master/status
+```
+
+Run a global master sync (admin only):
+
+```bash
+curl -i \
+  -X POST \
+  -H "Cookie: expense_session=<admin-session-cookie>" \
+  "http://localhost:4000/market-data/sync/instrument-master"
+```
+
+CLI equivalent from repository root:
+
+```bash
+pnpm instrument-master:sync
+```
+
+Re-run with `?force=true` only when you need to bypass content-hash idempotency.
+
+After sync, verify mapping for a known symbol:
+
+```bash
+curl -i \
+  -H "Cookie: expense_session=<session-cookie>" \
+  http://localhost:4000/market-data/instruments/INFY
+```
+
+Expect `source: "DHAN_SCRIP_MASTER"` and `dataQuality.mappingStatus: "VERIFIED"` when the symbol is uniquely active in the master.
+
 ## Broker connection tests
 
 Set the API encryption key and Dhan callback URL before starting the server:
@@ -46,7 +87,7 @@ booleans, and reconnect metadata:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/broker/dhan/connection
 ```
 
@@ -55,7 +96,7 @@ Start the supported OAuth connect flow:
 ```bash
 curl -i \
   -X POST http://localhost:4000/broker/dhan/connect/start \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "clientId": "1000000001",
@@ -73,7 +114,7 @@ Renew an active token (Dhan official `RenewToken`; fails once expired):
 ```bash
 curl -i \
   -X POST http://localhost:4000/broker/dhan/connect/renew \
-  -H "Cookie: finance_os_session=<session-cookie>"
+  -H "Cookie: expense_session=<session-cookie>"
 ```
 
 Legacy manual credential save remains available for migration only:
@@ -81,7 +122,7 @@ Legacy manual credential save remains available for migration only:
 ```bash
 curl -i \
   -X POST http://localhost:4000/broker/dhan/credentials \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "clientId": "1000000001",
@@ -97,7 +138,7 @@ Validate the read-only Dhan connection:
 ```bash
 curl -i \
   -X POST http://localhost:4000/broker/dhan/validate \
-  -H "Cookie: finance_os_session=<session-cookie>"
+  -H "Cookie: expense_session=<session-cookie>"
 ```
 
 Delete saved credentials:
@@ -105,7 +146,7 @@ Delete saved credentials:
 ```bash
 curl -i \
   -X DELETE http://localhost:4000/broker/dhan/credentials \
-  -H "Cookie: finance_os_session=<session-cookie>"
+  -H "Cookie: expense_session=<session-cookie>"
 ```
 
 ## Market data tests
@@ -116,31 +157,31 @@ table or latest Dhan broker holdings.
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/market-data/instruments/INFY
 ```
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/market-data/prices/INFY/latest
 ```
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   "http://localhost:4000/market-data/candles/INFY?from=2025-06-01&to=2026-05-30"
 ```
 
 ```bash
 curl -i \
   -X POST http://localhost:4000/market-data/indicators/recalculate/INFY \
-  -H "Cookie: finance_os_session=<session-cookie>"
+  -H "Cookie: expense_session=<session-cookie>"
 ```
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/market-data/indicators/INFY/latest
 ```
 
@@ -167,7 +208,7 @@ recommend, or place orders:
 ```bash
 curl -i \
   -X POST http://localhost:4000/risk/validate-trade \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -186,7 +227,7 @@ stop loss:
 ```bash
 curl -i \
   -X POST http://localhost:4000/risk/position-size \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "availableCash": 100000,
@@ -201,7 +242,7 @@ Review portfolio-level risk:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/risk/portfolio
 ```
 
@@ -252,7 +293,7 @@ Check scanner readiness before running a scan:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/scanner/readiness
 ```
 
@@ -260,7 +301,7 @@ Check readiness for explicit symbols:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   "http://localhost:4000/scanner/readiness?symbols=INFY,TCS"
 ```
 
@@ -278,7 +319,7 @@ Run a swing scan on synced holdings (default universe):
 ```bash
 curl -i \
   -X POST http://localhost:4000/scanner/swing/run \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -288,7 +329,7 @@ Run a swing scan on explicit symbols:
 ```bash
 curl -i \
   -X POST http://localhost:4000/scanner/swing/run \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{"symbols":["INFY","TCS"],"universe":"symbols"}'
 ```
@@ -297,7 +338,7 @@ Fetch the latest scan results:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/scanner/swing/candidates
 ```
 
@@ -316,7 +357,7 @@ List research items (optional filters):
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   "http://localhost:4000/research/items?symbol=INFY"
 ```
 
@@ -325,7 +366,7 @@ Add manual research evidence:
 ```bash
 curl -i \
   -X POST http://localhost:4000/research/items \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -344,7 +385,7 @@ Get symbol research bundle (snapshot, items, warnings, data quality):
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/research/INFY
 ```
 
@@ -353,7 +394,7 @@ Regenerate deterministic snapshot:
 ```bash
 curl -i \
   -X POST http://localhost:4000/research/INFY/snapshot \
-  -H "Cookie: finance_os_session=<session-cookie>"
+  -H "Cookie: expense_session=<session-cookie>"
 ```
 
 Delete a user-owned research item:
@@ -361,7 +402,7 @@ Delete a user-owned research item:
 ```bash
 curl -i \
   -X DELETE http://localhost:4000/research/items/<item-id> \
-  -H "Cookie: finance_os_session=<session-cookie>"
+  -H "Cookie: expense_session=<session-cookie>"
 ```
 
 Research checks should show:
@@ -379,7 +420,7 @@ List the tool catalog:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/tools
 ```
 
@@ -387,7 +428,7 @@ Inspect a single tool schema:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/tools/validate_trade_setup
 ```
 
@@ -396,7 +437,7 @@ Execute scanner readiness through the tool envelope:
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/get_scanner_readiness/execute \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -406,7 +447,7 @@ Execute trade validation (rejected path example):
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/validate_trade_setup/execute \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -423,7 +464,7 @@ Manual Super Order plan (formats parameters only; no broker call):
 ```bash
 curl -i \
   -X POST http://localhost:4000/tools/create_manual_super_order_plan/execute \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -440,7 +481,7 @@ List redacted audit history:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   http://localhost:4000/tools/audits
 ```
 
@@ -547,8 +588,9 @@ curl -i -X POST http://localhost:4000/mcp \
 
 ## Tool Tester UI acceptance (Phase 10 exit gate)
 
-Record this checklist in the PR or session notes before marking Phase 10 complete
-in `docs/ROADMAP.md` and `docs/PROJECT_STATE.md`.
+**Status: complete (2026-07-02)** — passed via authenticated `/tools` browser session.
+
+Record future re-runs in PR or session notes if contracts change materially.
 
 Prerequisites: `docker compose up -d`, `pnpm dev:api`, `pnpm dev:web`, signed-in
 session.
@@ -584,7 +626,7 @@ List journal entries:
 
 ```bash
 curl -i \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   "http://localhost:4000/trade-journal/entries?status=PLANNED"
 ```
 
@@ -593,7 +635,7 @@ Create a manual DELIVERY plan:
 ```bash
 curl -i \
   -X POST http://localhost:4000/trade-journal/entries \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -613,7 +655,7 @@ Save a plan from the latest scanner candidate (explicit user action):
 ```bash
 curl -i \
   -X POST http://localhost:4000/trade-journal/entries/from-scanner-candidate \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "INFY",
@@ -626,7 +668,7 @@ Close a trade with exit review fields:
 ```bash
 curl -i \
   -X PATCH http://localhost:4000/trade-journal/entries/<entry-id> \
-  -H "Cookie: finance_os_session=<session-cookie>" \
+  -H "Cookie: expense_session=<session-cookie>" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "CLOSED",

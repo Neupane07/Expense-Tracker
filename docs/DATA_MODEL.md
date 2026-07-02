@@ -43,14 +43,15 @@ reconciliation. They are read-only observations, not order-management records.
 
 ## Market Data
 
-- `Instrument`: symbol/exchange/security mapping and optional sector/industry
+- `Instrument`: symbol/exchange/security mapping, optional sector/industry, optional link to master entry
+- `InstrumentMasterEntry`: global Dhan scrip-master row with lifecycle status and raw source metadata
+- `InstrumentMasterSyncRun`: idempotent import/sync run status, counts, and provider metadata
 - `PriceSnapshot`: timestamped quote and quality metadata
 - `DailyCandle`: sourced OHLCV row with adjustment flag
 - `TechnicalIndicatorSnapshot`: deterministic indicator rollup
 - `DataQualityWarning`: persisted warning metadata
 
-Current `Instrument` rows are populated from known broker records. The model is
-not yet backed by a comprehensive security-master lifecycle.
+Current `Instrument` rows are resolved through the maintained Dhan scrip master when synced; broker snapshots remain a secondary hint only when the master has never synced. Lifecycle states (`ACTIVE`, `INACTIVE`, `DELISTED`, `RENAMED`) and ambiguous symbol matches fail closed in scanner/risk paths.
 
 ## Scanner and Journal
 
@@ -77,7 +78,6 @@ These concepts are not present in the current schema:
 - user-owned risk settings
 - corporate actions and candle-adjustment verification records
 - index/sector time series and market-regime snapshots
-- instrument-master import/sync runs
 - MCP credentials/allowlists, if a separate deployment later requires them
 
 Phase 11 stores MCP bearer credentials in `McpAccessToken` (hashed, per-user).

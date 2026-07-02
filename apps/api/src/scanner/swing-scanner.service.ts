@@ -259,6 +259,28 @@ export class SwingScannerService {
         normalizedSymbol,
       );
 
+    const resolution = await this.instruments.resolveMapping(
+      userId,
+      normalizedSymbol,
+    );
+
+    if (resolution.blockers.length > 0 || !resolution.securityId) {
+      return [
+        this.buildRejectedCandidate({
+          symbol: normalizedSymbol,
+          name: normalizedSymbol,
+          setupType: 'BREAKOUT',
+          rejectReasons:
+            resolution.blockers.length > 0
+              ? resolution.blockers
+              : ['UNKNOWN_SYMBOL'],
+          warnings: resolution.warnings,
+          dataQuality: emptyDataQuality(),
+          researchStatus,
+        }),
+      ];
+    }
+
     let instrumentRecord: Awaited<
       ReturnType<InstrumentsService['findBySymbol']>
     >;
@@ -275,8 +297,10 @@ export class SwingScannerService {
             symbol: normalizedSymbol,
             name: normalizedSymbol,
             setupType: 'BREAKOUT',
-            rejectReasons: ['UNKNOWN_SYMBOL'],
-            warnings: [],
+            rejectReasons: resolution.blockers.length
+              ? resolution.blockers
+              : ['UNKNOWN_SYMBOL'],
+            warnings: resolution.warnings,
             dataQuality: emptyDataQuality(),
             researchStatus,
           }),
