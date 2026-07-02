@@ -50,6 +50,19 @@ enum BrokerProvider {
   DHAN
 }
 
+enum InstrumentLifecycleStatus {
+  ACTIVE
+  INACTIVE
+  DELISTED
+  RENAMED
+}
+
+enum InstrumentMasterSyncStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 enum PortfolioAssetClass {
   STOCK
   ETF
@@ -515,6 +528,57 @@ model PortfolioSnapshot {
   @@index([brokerAccountId, snapshotTime])
 }
 
+model InstrumentMasterEntry {
+  id                     String                    @id @default(cuid())
+  securityId             String
+  exchange               String
+  segment                String
+  symbol                 String
+  displayName            String
+  isin                   String?
+  instrumentName         String
+  instrumentType         String
+  series                 String?
+  lifecycleStatus        InstrumentLifecycleStatus @default(ACTIVE)
+  supersededBySymbol     String?
+  supersededBySecurityId String?
+  buySellIndicator       String?
+  source                 String                    @default("DHAN_SCRIP_MASTER")
+  sourceRowHash          String
+  rawMetadata            Json
+  firstSeenAt            DateTime                  @default(now())
+  lastSeenAt             DateTime
+  instruments            Instrument[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  @@unique([exchange, securityId])
+  @@index([symbol, exchange])
+  @@index([isin])
+  @@index([lifecycleStatus])
+}
+
+model InstrumentMasterSyncRun {
+  id               String                     @id @default(cuid())
+  status           InstrumentMasterSyncStatus
+  sourceUrl        String
+  contentHash      String?
+  startedAt        DateTime                   @default(now())
+  completedAt      DateTime?
+  fetchedAt        DateTime?
+  rowCount         Int                        @default(0)
+  upsertedCount    Int                        @default(0)
+  deactivatedCount Int                        @default(0)
+  conflictCount    Int                        @default(0)
+  skippedCount     Int                        @default(0)
+  errorMessage     String?
+  rawMetadata      Json?
+  createdAt        DateTime                   @default(now())
+
+  @@index([startedAt])
+  @@index([status])
+}
+
 model Instrument {
   id                  String                       @id @default(cuid())
   symbol              String
@@ -526,6 +590,9 @@ model Instrument {
   sector              String?
   industry            String?
   isActive            Boolean                      @default(true)
+  lifecycleStatus     InstrumentLifecycleStatus?
+  masterEntryId       String?
+  masterEntry         InstrumentMasterEntry?       @relation(fields: [masterEntryId], references: [id], onDelete: SetNull)
   source              String
   lastVerifiedAt      DateTime?
   priceSnapshots      PriceSnapshot[]
@@ -541,6 +608,7 @@ model Instrument {
   @@index([securityId, exchange])
   @@index([isin])
   @@index([symbol])
+  @@index([masterEntryId])
 }
 
 model PriceSnapshot {

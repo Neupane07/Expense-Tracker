@@ -1,3 +1,4 @@
+import { InstrumentsService } from '../market-data/instruments.service';
 import { ScannerReadinessService } from './scanner-readiness.service';
 import { BrokerCredentialsService } from '../broker/broker-credentials.service';
 import { MarketDataQualityService } from '../market-data/market-data-quality.service';
@@ -30,6 +31,26 @@ describe('ScannerReadinessService', () => {
       } as unknown as BrokerCredentialsService,
       new MarketDataQualityService(),
       new InstrumentVerificationService(),
+      {
+        resolveMapping: jest.fn().mockResolvedValue({
+          symbol: 'INFY',
+          exchange: 'NSE',
+          securityId: '123',
+          isin: null,
+          name: 'INFY',
+          instrumentType: 'EQUITY',
+          lifecycleStatus: 'ACTIVE',
+          mappingStatus: 'INFERRED',
+          source: 'DHAN_HOLDINGS',
+          masterEntryId: null,
+          masterAsOf: null,
+          masterStale: true,
+          warnings: ['INSTRUMENT_MASTER_NOT_SYNCED'],
+          blockers: [],
+          conflicts: [],
+          precedenceRule: 'broker_inferred_no_master',
+        }),
+      } as unknown as InstrumentsService,
       researchSnapshots,
     );
   }
@@ -84,6 +105,7 @@ describe('ScannerReadinessService', () => {
         findFirst: jest.fn().mockResolvedValue({
           id: 'inst-1',
           symbol: 'INFY',
+          exchange: 'NSE',
           securityId: '123',
           source: 'DHAN_HOLDINGS',
           lastVerifiedAt: new Date('2026-06-13T08:00:00.000Z'),

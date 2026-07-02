@@ -24,9 +24,10 @@ still pending.
 
 Phase 11 read-only MCP adapter is implemented at `POST /mcp` with bearer-token
 auth, allowlisted tool exposure, and the same executor/audit path as `/tools`.
-Important domain gaps also remain in instrument-master coverage, corporate-action
-ingestion, automated research sources, market regime/sector breadth, and broad
-scanner universe expansion.
+Phase 12A instrument master sync and lifecycle-aware symbol mapping are
+implemented using Dhan's official scrip-master CSV. Corporate-action ingestion,
+automated research sources, market regime/sector breadth, and broad scanner
+universe expansion remain open.
 
 ## Implemented
 
@@ -56,7 +57,10 @@ scanner universe expansion.
 
 ### Market data and risk
 
-- instrument records resolved from known broker holdings/orders/trades
+- maintained global Dhan scrip-master ingestion with sync-run metadata and content-hash idempotency
+- lifecycle-aware symbol mapping (`ACTIVE`, `INACTIVE`, `DELISTED`, `RENAMED`) with explicit conflict diagnostics
+- scanner/risk/readiness rejection for ambiguous, inactive, delisted, renamed, or broker/master identifier conflicts
+- instrument records resolved from master first; broker snapshots are hints only before the first master sync
 - Dhan latest-price and historical daily-candle reads
 - stored prices, candles, indicators, and quality warnings
 - SMA 20/50/200, RSI 14, ATR 14, volume average/ratio, SMA-50 distance
@@ -118,12 +122,9 @@ scanner universe expansion.
 
 ### Instrument and market-data foundation
 
-- Instrument mapping is derived from the user's broker history. There is no
-  maintained Dhan/NSE/BSE security-master ingestion, inactive-symbol lifecycle,
-  or comprehensive tradable universe.
-- `InstrumentVerificationService` documents mapping status and blocks
-  history-dependent operations when corporate-action adjustment cannot be
-  verified. No corporate-action provider exists yet.
+- Dhan official `api-scrip-master-detailed.csv` backs a global `InstrumentMasterEntry` table with sync runs, raw row metadata, and lifecycle status.
+- `InstrumentVerificationService` and `InstrumentMasterMappingService` enforce mapping precedence and fail closed on ambiguity, inactive/delisted symbols, renames, and broker/master identifier conflicts.
+- `InstrumentVerificationService` documents corporate-action adjustment policy and blocks history-dependent operations when corporate-action adjustment cannot be verified. No corporate-action provider exists yet.
 - Instrument `sector` and `industry` fields exist but no authoritative enrichment
   pipeline is present.
 - 52-week distance, relative strength, index/sector series, liquidity screens,
@@ -178,7 +179,7 @@ scanner universe expansion.
 ## Missing
 
 - Tool Tester manual acceptance pass (Phase 10 exit gate)
-- instrument-master and corporate-action ingestion pipelines
+- corporate-action ingestion pipelines
 - official/licensed filing and news ingestion
 - market regime, index/sector strength, and broad scanner universe
 
@@ -228,7 +229,7 @@ by this repository.
 - expenses: `Account`, `Import`, `Transaction`, `TransactionCategory`, `Rule`
 - broker: account/connection/credential and holding/position/order/trade/fund snapshots
 - portfolio: mutual-fund holdings/NAV and portfolio snapshots
-- market data: instrument, price, daily candle, indicator, data-quality warning
+- market data: instrument master entries/sync runs, instrument, price, daily candle, indicator, data-quality warning
 - scanner: `SwingScanRun`
 - journal: `TradeJournalEntry`
 - research: `ResearchItem`, `ResearchEvidence`, `ResearchSnapshot`
@@ -246,6 +247,8 @@ Implemented authenticated route groups:
 - `/broker/dhan/*`
 - `/portfolio/*`
 - `/market-data/*`
+- `/market-data/instrument-master/status`
+- `/market-data/sync/instrument-master` (admin only)
 - `/risk/*`
 - `/scanner/swing/*`
 - `/scanner/readiness`
@@ -292,10 +295,10 @@ Only then mark Phase 10 complete and start Phase 11 (read-only MCP adapter).
 Recommended order:
 
 ```text
-Tool Tester acceptance (open) -> provider/data breadth (Phase 12)
+Tool Tester acceptance (open) -> Phase 12B corporate actions
 ```
 
-Phase 11 MCP adapter is complete.
+Phase 11 MCP adapter is complete. Phase 12A instrument master is complete.
 
 ## Non-Negotiable Boundaries
 

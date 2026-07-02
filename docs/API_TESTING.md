@@ -28,6 +28,45 @@
 - POST /portfolio/sync/amfi-nav
 - GET /portfolio/snapshot
 
+## Instrument master tests (Phase 12A)
+
+Prerequisites: API running, database migrated, admin session cookie.
+
+Check sync status (any authenticated user):
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  http://localhost:4000/market-data/instrument-master/status
+```
+
+Run a global master sync (admin only):
+
+```bash
+curl -i \
+  -X POST \
+  -H "Cookie: finance_os_session=<admin-session-cookie>" \
+  "http://localhost:4000/market-data/sync/instrument-master"
+```
+
+CLI equivalent from repository root:
+
+```bash
+pnpm instrument-master:sync
+```
+
+Re-run with `?force=true` only when you need to bypass content-hash idempotency.
+
+After sync, verify mapping for a known symbol:
+
+```bash
+curl -i \
+  -H "Cookie: finance_os_session=<session-cookie>" \
+  http://localhost:4000/market-data/instruments/INFY
+```
+
+Expect `source: "DHAN_SCRIP_MASTER"` and `dataQuality.mappingStatus: "VERIFIED"` when the symbol is uniquely active in the master.
+
 ## Broker connection tests
 
 Set the API encryption key and Dhan callback URL before starting the server:

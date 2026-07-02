@@ -14,6 +14,7 @@ import {
 import { BrokerCredentialsService } from '../broker/broker-credentials.service';
 import { MarketDataQualityService } from '../market-data/market-data-quality.service';
 import { InstrumentVerificationService } from '../market-data/instrument-verification.service';
+import { InstrumentsService } from '../market-data/instruments.service';
 import { ResearchSnapshotService } from '../research/research-snapshot.service';
 
 const BROKER_SYNC_STALE_HOURS = 24;
@@ -31,6 +32,7 @@ export class ScannerReadinessService {
     private readonly brokerCredentials: BrokerCredentialsService,
     private readonly marketQuality: MarketDataQualityService,
     private readonly instrumentVerification: InstrumentVerificationService,
+    private readonly instruments: InstrumentsService,
     private readonly researchSnapshots: ResearchSnapshotService,
   ) {}
 
@@ -238,9 +240,33 @@ export class ScannerReadinessService {
     const blockers: string[] = [];
     const details: Record<string, unknown> = { symbol: normalizedSymbol };
 
+    const resolution = await this.instruments.resolveMapping(
+      userId,
+      normalizedSymbol,
+    );
+    const mapping =
+      this.instrumentVerification.evaluateFromResolution(resolution);
+    warnings.push(...mapping.warnings);
+    blockers.push(...mapping.blockers);
+    details.mapping = mapping;
+
+    if (mapping.blockers.length > 0 || !resolution.securityId) {
+      return {
+        id: `symbol:${normalizedSymbol}`,
+        label: normalizedSymbol,
+        status: 'BLOCKED',
+        mappingStatus: mapping.mappingStatus,
+        warnings: [...new Set(warnings)],
+        blockers: [...new Set(blockers)],
+        details,
+      };
+    }
+
     const instrument = await this.prisma.instrument.findFirst({
-      where: { symbol: normalizedSymbol, isActive: true },
-      orderBy: { lastVerifiedAt: 'desc' },
+      where: {
+        symbol: resolution.symbol,
+        exchange: resolution.exchange,
+      },
     });
 
     if (!instrument) {
@@ -249,26 +275,17 @@ export class ScannerReadinessService {
         id: `symbol:${normalizedSymbol}`,
         label: normalizedSymbol,
         status: 'BLOCKED',
-        mappingStatus: 'MISSING',
-        warnings,
-        blockers,
+        mappingStatus: mapping.mappingStatus,
+        warnings: [...new Set(warnings)],
+        blockers: [...new Set(blockers)],
         details,
       };
     }
 
-    const mapping = this.instrumentVerification.evaluateInstrumentMapping({
-      symbol: normalizedSymbol,
-      securityId: instrument.securityId,
-      source: instrument.source,
-      lastVerifiedAt: instrument.lastVerifiedAt,
-      isActive: instrument.isActive,
-    });
-    warnings.push(...mapping.warnings);
-    blockers.push(...mapping.blockers);
-    details.mapping = mapping;
+    const instrumentId = instrument.id;
 
     const price = await this.prisma.priceSnapshot.findFirst({
-      where: { instrumentId: instrument.id },
+      where: { instrumentId },
       orderBy: { timestamp: 'desc' },
     });
     const priceQuality = this.marketQuality.priceQuality(
@@ -289,7 +306,7 @@ export class ScannerReadinessService {
     }
 
     const candles = await this.prisma.dailyCandle.findMany({
-      where: { instrumentId: instrument.id },
+      where: { instrumentId },
       select: { isAdjusted: true, date: true, source: true },
       orderBy: { date: 'desc' },
       take: 250,
@@ -311,7 +328,7 @@ export class ScannerReadinessService {
     details.corporateAction = corporateAction;
 
     const indicators = await this.prisma.technicalIndicatorSnapshot.findFirst({
-      where: { instrumentId: instrument.id },
+      where: { instrumentId },
       orderBy: { asOfDate: 'desc' },
     });
     details.indicators = {

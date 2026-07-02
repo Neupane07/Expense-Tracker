@@ -2,6 +2,7 @@ import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { AdminGuard } from '../auth/admin.guard';
 import { MarketDataService } from './market-data.service';
 
 @Controller('market-data')
@@ -12,6 +13,19 @@ export class MarketDataController {
   @Get()
   getStatus() {
     return this.marketDataService.getStatus();
+  }
+
+  @Get('instrument-master/status')
+  getInstrumentMasterStatus() {
+    return this.marketDataService.getInstrumentMasterStatus();
+  }
+
+  @Post('sync/instrument-master')
+  @UseGuards(AdminGuard)
+  syncInstrumentMaster(@Query('force') force?: string) {
+    return this.marketDataService.syncInstrumentMaster({
+      force: force === 'true',
+    });
   }
 
   @Get('instruments/:symbol')

@@ -12,6 +12,20 @@ describe('InstrumentVerificationService', () => {
     service = module.get(InstrumentVerificationService);
   });
 
+  it('marks master-backed mappings as verified', () => {
+    const result = service.evaluateInstrumentMapping({
+      symbol: 'INFY',
+      securityId: '12345',
+      source: 'DHAN_SCRIP_MASTER',
+      lastVerifiedAt: new Date('2026-06-01T10:00:00.000Z'),
+      lifecycleStatus: 'ACTIVE' as const,
+    });
+
+    expect(result.mappingStatus).toBe('VERIFIED');
+    expect(result.verified).toBe(true);
+    expect(result.blockers).toHaveLength(0);
+  });
+
   it('marks broker-derived mappings as inferred', () => {
     const result = service.evaluateInstrumentMapping({
       symbol: 'INFY',
@@ -26,6 +40,30 @@ describe('InstrumentVerificationService', () => {
       'INSTRUMENT_MAPPING_INFERRED_FROM_BROKER',
     );
     expect(result.blockers).toHaveLength(0);
+  });
+
+  it('blocks ambiguous and inactive lifecycle states', () => {
+    const ambiguous = service.evaluateInstrumentMapping({
+      symbol: 'DUPA',
+      securityId: '1',
+      source: 'DHAN_SCRIP_MASTER',
+      lastVerifiedAt: new Date('2026-06-01T10:00:00.000Z'),
+      mappingStatus: 'AMBIGUOUS',
+      blockers: ['INSTRUMENT_MAPPING_AMBIGUOUS'],
+    });
+
+    expect(ambiguous.mappingStatus).toBe('AMBIGUOUS');
+    expect(ambiguous.blockers).toContain('INSTRUMENT_MAPPING_AMBIGUOUS');
+
+    const inactive = service.evaluateInstrumentMapping({
+      symbol: 'OLD',
+      securityId: '2',
+      source: 'DHAN_SCRIP_MASTER',
+      lastVerifiedAt: new Date('2026-06-01T10:00:00.000Z'),
+      lifecycleStatus: 'INACTIVE' as const,
+    });
+
+    expect(inactive.blockers).toContain('INSTRUMENT_INACTIVE');
   });
 
   it('blocks when security mapping is missing', () => {

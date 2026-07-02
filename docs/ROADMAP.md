@@ -106,11 +106,22 @@ Exit gate:
 
 ## Phase 12: Verified Data Breadth
 
-Status: Later
+Status: In progress (12A complete)
 
 Scope candidates, in this order:
 
-- maintained Dhan/NSE/BSE instrument master and symbol lifecycle handling
+### Phase 12A: Instrument master and symbol lifecycle
+
+Status: Complete
+
+- Dhan official `api-scrip-master-detailed.csv` ingestion (global, not user-scoped)
+- `InstrumentMasterEntry` + `InstrumentMasterSyncRun` models with raw metadata
+- idempotent sync by content hash; admin API + CLI sync command
+- deterministic mapping precedence, conflict diagnostics, lifecycle states
+- scanner/risk/readiness rejection for ambiguous, inactive, delisted, renamed, or conflicting mappings
+
+### Remaining Phase 12 scope
+
 - corporate-action-aware candle adjustment/validation
 - licensed or official filing ingestion
 - curated/official news ingestion

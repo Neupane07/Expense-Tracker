@@ -159,12 +159,12 @@ Current:
 
 - Dhan read-only broker/account and market-data APIs
 - Dhan individual OAuth connect flow (API key + browser login + token exchange)
+- Dhan official instrument master CSV (`api-scrip-master-detailed.csv`) with sync runs and lifecycle-aware symbol mapping
 - AMFI NAV text feed
 - manual/user-URL research evidence
 
 Partial or missing:
 
-- comprehensive instrument master
 - corporate actions
 - official filings
 - licensed/curated news

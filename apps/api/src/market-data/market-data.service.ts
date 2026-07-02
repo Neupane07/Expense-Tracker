@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CandlesService } from './candles.service';
 import { IndicatorsService } from './indicators.service';
+import { InstrumentMasterSyncService } from './instrument-master-sync.service';
 import { InstrumentsService } from './instruments.service';
 import { PricesService } from './prices.service';
 
@@ -11,6 +12,7 @@ export class MarketDataService {
     private readonly prices: PricesService,
     private readonly candles: CandlesService,
     private readonly indicators: IndicatorsService,
+    private readonly instrumentMasterSync: InstrumentMasterSyncService,
   ) {}
 
   getStatus() {
@@ -18,6 +20,14 @@ export class MarketDataService {
       module: 'market-data',
       status: 'read-only',
     };
+  }
+
+  getInstrumentMasterStatus() {
+    return this.instrumentMasterSync.getStatusSummary();
+  }
+
+  syncInstrumentMaster(options: { force?: boolean } = {}) {
+    return this.instrumentMasterSync.syncFromProvider(options);
   }
 
   async getInstrument(userId: string, symbol: string) {
