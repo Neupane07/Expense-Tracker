@@ -152,7 +152,7 @@ curl -i \
 - expense module still works
 - market-data responses include source, asOf/timestamp, dataQuality, and warnings
 - scanner endpoints are read-only research tools and do not place orders
-- MCP and order placement endpoints do not exist
+- MCP adapter is read-only; order placement endpoints do not exist
 - portfolio UI loads snapshot, holdings, orders, and data-quality warnings
 - Dhan sync button calls `POST /portfolio/sync/dhan`
 - mutual fund UI calls existing create, update, delete, and AMFI sync APIs
@@ -454,6 +454,96 @@ Tool checks should show:
 - `POST /tools/place_order/execute` returns 404 (forbidden tool name)
 - audit records contain metadata only (no full financial output payload)
 - `validate_trade_setup` and `POST /risk/validate-trade` agree for the same input
+
+## MCP read-only adapter tests (Phase 11)
+
+Prerequisites:
+
+```bash
+docker compose up -d
+# set MCP_ENABLED=true in apps/api/.env
+cd apps/api && pnpm prisma migrate dev
+pnpm dev:api
+```
+
+Issue a bearer token for a signed-in user:
+
+```bash
+pnpm mcp:issue-token --userEmail you@example.com --label local-mcp
+```
+
+Store the returned `token` securely. Check readiness:
+
+```bash
+curl -s http://localhost:4000/health/mcp | jq
+```
+
+Initialize MCP (Streamable HTTP):
+
+```bash
+curl -s -X POST http://localhost:4000/mcp \
+  -H "Authorization: Bearer <mcp-token>" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": { "name": "manual-test", "version": "1.0.0" }
+    }
+  }' | jq
+```
+
+List exposed tools:
+
+```bash
+curl -s -X POST http://localhost:4000/mcp \
+  -H "Authorization: Bearer <mcp-token>" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | jq
+```
+
+Call scanner readiness:
+
+```bash
+curl -s -X POST http://localhost:4000/mcp \
+  -H "Authorization: Bearer <mcp-token>" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "get_scanner_readiness",
+      "arguments": {}
+    }
+  }' | jq
+```
+
+MCP checks should show:
+
+- exactly eight allowlisted tools on `tools/list`
+- `structuredContent` matches the `/tools/:name/execute` envelope for the same user/input
+- `auditId` present on successful tool calls
+- no `apiKey`, `apiSecret`, `accessToken`, or session cookie values in responses
+- `401` without bearer token; `400` when a browser session cookie is sent
+- `429` after exceeding `MCP_RATE_LIMIT_PER_MINUTE`
+- `503` when `MCP_ENABLED=false`
+- `place_order` is not listed and cannot be invoked
+
+Negative auth check:
+
+```bash
+curl -i -X POST http://localhost:4000/mcp \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+```
 
 ## Tool Tester UI acceptance (Phase 10 exit gate)
 

@@ -80,6 +80,9 @@ These concepts are not present in the current schema:
 - instrument-master import/sync runs
 - MCP credentials/allowlists, if a separate deployment later requires them
 
+Phase 11 stores MCP bearer credentials in `McpAccessToken` (hashed, per-user).
+Tool allowlisting remains code-defined in `apps/api/src/mcp/mcp.constants.ts`.
+
 ## Internal Tools and Audit (Phase 9)
 
 Tool definitions are code-defined in `apps/api/src/internal-tools`. Execution
@@ -90,6 +93,15 @@ audits are persisted:
   `durationMs`, `inputHash`, redacted `inputMeta`, warning/reject counts,
   `errorCode`)
 - Enum `ToolExecutionStatus`: `OK`, `REJECTED`, `UNAVAILABLE`, `ERROR`
+
+## MCP Access (Phase 11)
+
+- `McpAccessToken`: hashed revocable bearer credential mapped to one `userId`
+  (`tokenHash`, `tokenPrefix`, optional `label`, `revokedAt`, `expiresAt`,
+  `lastUsedAt`)
+
+MCP tokens must not store plaintext secrets. Plaintext is shown once at issuance
+via `pnpm mcp:issue-token`.
 
 Retention: prune `ToolExecutionAudit` rows older than 90 days via a scheduled
 job (not yet implemented). Indexes support per-user history and tool-name

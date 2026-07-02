@@ -22,8 +22,8 @@ callable over authenticated `/tools` endpoints. A browser Tool Tester UI at
 `/tools` calls the same registry path; manual acceptance of all eight tools is
 still pending.
 
-Phase 11 (read-only MCP adapter) should not start until Phase 10 acceptance is
-recorded.
+Phase 11 read-only MCP adapter is implemented at `POST /mcp` with bearer-token
+auth, allowlisted tool exposure, and the same executor/audit path as `/tools`.
 Important domain gaps also remain in instrument-master coverage, corporate-action
 ingestion, automated research sources, market regime/sector breadth, and broad
 scanner universe expansion.
@@ -84,6 +84,8 @@ scanner universe expansion.
   swing scan, trade validation, stock deep dive, research snapshot, and manual
   Super Order plan formatting (no broker calls)
 - authenticated `/tools` catalog, schema, execute, and audit endpoints
+- read-only MCP adapter at `POST /mcp` with revocable bearer tokens, rate limits,
+  allowlisted tool bridge, and `GET /health/mcp` readiness
 
 ### Tool Tester UI (Phase 10 — code)
 
@@ -176,7 +178,6 @@ scanner universe expansion.
 ## Missing
 
 - Tool Tester manual acceptance pass (Phase 10 exit gate)
-- read-only MCP server/adapter (Phase 11)
 - instrument-master and corporate-action ingestion pipelines
 - official/licensed filing and news ingestion
 - market regime, index/sector strength, and broad scanner universe
@@ -194,7 +195,7 @@ portfolio             broker/dhan
 market-data           risk
 scanner               trade-journal
 research              internal-tools
-prisma                health
+mcp                   prisma                health
 ```
 
 All financial controllers use the session guard. `ConfigModule` is global and
@@ -255,8 +256,9 @@ Implemented authenticated route groups:
 - `/tools/:name/execute` — execute tool (read-only handlers)
 - `/tools/audits`, `/tools/audits/:auditId` — execution audit history
 
-Public routes are limited to health and required authentication entry/session
-flow. No MCP adapter exists yet.
+Public routes are limited to health (`/health`, `/health/mcp`) and required
+authentication entry/session flow. MCP requires `MCP_ENABLED=true` and a valid
+bearer token; it does not accept browser session cookies.
 
 ## Test Inventory
 
@@ -279,7 +281,7 @@ Remaining high-value gaps:
 - controller/DTO validation contracts
 - Tool Tester UI Vitest coverage — in `apps/web`; manual `/tools` acceptance
   pass still required for Phase 10 closure
-- deployment/security tests for MCP only after it exists
+- deployment/security tests for MCP — implemented in `apps/api/test/mcp.e2e-spec.ts`
 
 ## Immediate Recommendation
 
@@ -290,8 +292,10 @@ Only then mark Phase 10 complete and start Phase 11 (read-only MCP adapter).
 Recommended order:
 
 ```text
-Tool Tester acceptance (open) -> MCP adapter -> provider/data breadth
+Tool Tester acceptance (open) -> provider/data breadth (Phase 12)
 ```
+
+Phase 11 MCP adapter is complete.
 
 ## Non-Negotiable Boundaries
 
