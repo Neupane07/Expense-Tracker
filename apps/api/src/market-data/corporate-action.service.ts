@@ -13,6 +13,13 @@ import {
 import type { CorporateActionImportEvent } from './corporate-action.dto';
 import { CorporateActionPolicyService } from './corporate-action-policy.service';
 
+export type CorporateActionInstrumentRef = {
+  id: string;
+  symbol: string;
+  exchange: string;
+  securityId?: string | null;
+};
+
 @Injectable()
 export class CorporateActionInvalidationService {
   constructor(
@@ -59,7 +66,6 @@ export class CorporateActionInvalidationService {
     await this.prisma.corporateActionEvent.update({
       where: { id: event.id },
       data: {
-        processedAt: new Date(),
         invalidationFromDate,
       },
     });
@@ -67,6 +73,125 @@ export class CorporateActionInvalidationService {
     return {
       invalidatedCandleCount: candleDelete.count,
       invalidatedIndicatorCount: indicatorDelete.count,
+    };
+  }
+
+  async completeRehydrationIfReady(instrumentId: string) {
+    const pending = await this.prisma.corporateActionEvent.findMany({
+      where: {
+        instrumentId,
+        supersededAt: null,
+        processedAt: null,
+        invalidationFromDate: { not: null },
+        eventType: {
+          in: Array.from(
+            PRICE_AFFECTING_EVENT_TYPES,
+          ) as CorporateActionEventType[],
+        },
+      },
+    });
+
+    let completedCount = 0;
+
+    for (const event of pending) {
+      if (!event.invalidationFromDate) {
+        continue;
+      }
+
+      const rehydratedCount = await this.prisma.dailyCandle.count({
+        where: {
+          instrumentId,
+          date: { lt: event.invalidationFromDate },
+        },
+      });
+
+      if (rehydratedCount === 0) {
+        continue;
+      }
+
+      await this.prisma.corporateActionEvent.update({
+        where: { id: event.id },
+        data: { processedAt: new Date() },
+      });
+      completedCount += 1;
+    }
+
+    return { completedCount };
+  }
+
+  async needsProviderRehydration(
+    instrument: CorporateActionInstrumentRef,
+    fromDate: Date,
+    candles: Array<{ date: Date }>,
+  ) {
+    const pendingRehydration = await this.prisma.corporateActionEvent.count({
+      where: this.pendingRehydrationWhere(instrument),
+    });
+
+    if (pendingRehydration > 0) {
+      return true;
+    }
+
+    if (candles.length === 0) {
+      return true;
+    }
+
+    return candles[0].date.getTime() > fromDate.getTime();
+  }
+
+  async linkOrphanedEventsForInstrument(
+    instrument: CorporateActionInstrumentRef,
+  ) {
+    await this.prisma.corporateActionEvent.updateMany({
+      where: {
+        symbol: instrument.symbol,
+        exchange: instrument.exchange,
+        instrumentId: null,
+      },
+      data: {
+        instrumentId: instrument.id,
+        securityId: instrument.securityId ?? undefined,
+      },
+    });
+
+    return this.processPendingForInstrument(instrument.id);
+  }
+
+  async countBlockingOrphanedEvents(symbol: string, exchange: string) {
+    return this.prisma.corporateActionEvent.count({
+      where: {
+        symbol,
+        exchange,
+        instrumentId: null,
+        supersededAt: null,
+        processedAt: null,
+        eventType: {
+          in: Array.from(
+            PRICE_AFFECTING_EVENT_TYPES,
+          ) as CorporateActionEventType[],
+        },
+      },
+    });
+  }
+
+  private pendingRehydrationWhere(instrument: CorporateActionInstrumentRef) {
+    return {
+      supersededAt: null,
+      processedAt: null,
+      invalidationFromDate: { not: null },
+      eventType: {
+        in: Array.from(
+          PRICE_AFFECTING_EVENT_TYPES,
+        ) as CorporateActionEventType[],
+      },
+      OR: [
+        { instrumentId: instrument.id },
+        {
+          instrumentId: null,
+          symbol: instrument.symbol,
+          exchange: instrument.exchange,
+        },
+      ],
     };
   }
 
@@ -291,6 +416,7 @@ export class CorporateActionSyncService {
     private readonly prisma: PrismaService,
     private readonly policy: CorporateActionPolicyService,
     private readonly importService: CorporateActionImportService,
+    private readonly invalidation: CorporateActionInvalidationService,
   ) {}
 
   async syncFromProvider() {
@@ -380,7 +506,7 @@ export class CorporateActionSyncService {
   }
 
   async evaluateForInstrument(
-    instrumentId: string,
+    instrument: CorporateActionInstrumentRef,
     candles: Array<{
       source: string;
       isAdjusted: boolean;
@@ -389,13 +515,24 @@ export class CorporateActionSyncService {
     asOf = new Date(),
   ) {
     const events = await this.prisma.corporateActionEvent.findMany({
-      where: { instrumentId, supersededAt: null },
+      where: {
+        supersededAt: null,
+        OR: [
+          { instrumentId: instrument.id },
+          {
+            instrumentId: null,
+            symbol: instrument.symbol,
+            exchange: instrument.exchange,
+          },
+        ],
+      },
       select: {
         eventType: true,
         exDate: true,
         effectiveDate: true,
         processedAt: true,
         supersededAt: true,
+        invalidationFromDate: true,
       },
     });
     const latestSuccessful = await this.prisma.corporateActionSyncRun.findFirst(
@@ -418,6 +555,61 @@ export class CorporateActionSyncService {
       lastSuccessfulEventSyncAt: latestSuccessful?.completedAt ?? null,
       asOf,
     });
+  }
+
+  async evaluateOrphanedEventsForSymbol(symbol: string, exchange: string) {
+    const events = await this.prisma.corporateActionEvent.findMany({
+      where: {
+        symbol,
+        exchange,
+        instrumentId: null,
+        supersededAt: null,
+      },
+      select: {
+        eventType: true,
+        exDate: true,
+        effectiveDate: true,
+        processedAt: true,
+        supersededAt: true,
+        invalidationFromDate: true,
+      },
+    });
+    const latestSuccessful = await this.prisma.corporateActionSyncRun.findFirst(
+      {
+        where: { status: CorporateActionSyncStatus.COMPLETED },
+        orderBy: { completedAt: 'desc' },
+      },
+    );
+
+    return this.policy.evaluatePolicy({
+      candles: [],
+      events,
+      lastSuccessfulEventSyncAt: latestSuccessful?.completedAt ?? null,
+    });
+  }
+
+  linkOrphanedEventsAndProcess(instrument: CorporateActionInstrumentRef) {
+    return this.invalidation.linkOrphanedEventsForInstrument(instrument);
+  }
+
+  needsProviderRehydration(
+    instrument: CorporateActionInstrumentRef,
+    fromDate: Date,
+    candles: Array<{ date: Date }>,
+  ) {
+    return this.invalidation.needsProviderRehydration(
+      instrument,
+      fromDate,
+      candles,
+    );
+  }
+
+  completeRehydrationIfReady(instrumentId: string) {
+    return this.invalidation.completeRehydrationIfReady(instrumentId);
+  }
+
+  countBlockingOrphanedEvents(symbol: string, exchange: string) {
+    return this.invalidation.countBlockingOrphanedEvents(symbol, exchange);
   }
 }
 

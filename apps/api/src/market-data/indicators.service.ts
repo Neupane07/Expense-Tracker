@@ -46,14 +46,23 @@ export class IndicatorsService {
 
   async recalculate(userId: string, symbol: string) {
     const instrument = await this.instruments.findBySymbol(userId, symbol);
-    const storedCandles = await this.prisma.dailyCandle.findMany({
-      where: { instrumentId: instrument.id },
-      select: { source: true, isAdjusted: true, dataQuality: true },
-      orderBy: { date: 'asc' },
-    });
+    const candleResponse = await this.candles.getCandlesForIndicators(
+      userId,
+      symbol,
+    );
     const policy = await this.corporateActions.evaluateForInstrument(
-      instrument.id,
-      storedCandles,
+      {
+        id: instrument.id,
+        symbol: instrument.symbol,
+        exchange: instrument.exchange,
+      },
+      candleResponse.candles.map((candle) => ({
+        source: candle.source,
+        isAdjusted: candle.isAdjusted,
+        dataQuality: candle.adjustmentPolicy
+          ? { adjustmentPolicy: candle.adjustmentPolicy }
+          : null,
+      })),
     );
 
     if (policy.blocksHistoricalAnalysis) {
@@ -62,10 +71,6 @@ export class IndicatorsService {
       );
     }
 
-    const candleResponse = await this.candles.getCandlesForIndicators(
-      userId,
-      symbol,
-    );
     const indicatorCandles: IndicatorCandle[] = candleResponse.candles.map(
       (candle) => ({
         date: new Date(candle.date),

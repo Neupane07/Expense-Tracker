@@ -56,6 +56,7 @@ describe('ScannerReadinessService', () => {
               }),
             ),
         ),
+        countBlockingOrphanedEvents: jest.fn().mockResolvedValue(0),
       } as unknown as CorporateActionSyncService,
       {
         resolveMapping: jest.fn().mockResolvedValue({

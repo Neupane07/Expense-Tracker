@@ -48,6 +48,7 @@ export type CorporateActionEventSummary = {
   effectiveDate: Date;
   processedAt: Date | null;
   supersededAt: Date | null;
+  invalidationFromDate?: Date | null;
 };
 
 @Injectable()
@@ -68,6 +69,12 @@ export class CorporateActionPolicyService {
       (event) =>
         PRICE_AFFECTING_EVENT_TYPES.has(event.eventType) &&
         event.processedAt == null,
+    );
+    const awaitingRehydration = unprocessedPriceAffecting.filter(
+      (event) => event.invalidationFromDate != null,
+    );
+    const pendingInvalidationOnly = unprocessedPriceAffecting.filter(
+      (event) => event.invalidationFromDate == null,
     );
 
     if (input.candles.length === 0) {
@@ -106,7 +113,12 @@ export class CorporateActionPolicyService {
       asOf,
     );
 
-    if (unprocessedPriceAffecting.length > 0) {
+    if (awaitingRehydration.length > 0) {
+      blockers.push('CORPORATE_ACTION_REHYDRATION_REQUIRED');
+      warnings.push('CORPORATE_ACTION_REHYDRATION_REQUIRED');
+    }
+
+    if (pendingInvalidationOnly.length > 0) {
       blockers.push('CORPORATE_ACTION_PENDING_INVALIDATION');
       warnings.push('CORPORATE_ACTION_PENDING_INVALIDATION');
     }
@@ -138,6 +150,7 @@ export class CorporateActionPolicyService {
 
     const blocksHistoricalAnalysis =
       blockers.includes('CORPORATE_ACTION_PENDING_INVALIDATION') ||
+      blockers.includes('CORPORATE_ACTION_REHYDRATION_REQUIRED') ||
       blockers.includes('CORPORATE_ACTION_SYNC_STALE');
 
     return {

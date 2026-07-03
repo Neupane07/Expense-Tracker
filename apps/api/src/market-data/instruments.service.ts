@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InstrumentLifecycleStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CorporateActionSyncService } from './corporate-action.service';
 import { DHAN_SCRIP_MASTER_SOURCE } from './instrument-master.constants';
 import { InstrumentMasterMappingService } from './instrument-master-mapping.service';
 
@@ -9,6 +10,7 @@ export class InstrumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly masterMapping: InstrumentMasterMappingService,
+    private readonly corporateActions: CorporateActionSyncService,
   ) {}
 
   async findBySymbol(userId: string, symbol: string) {
@@ -41,7 +43,7 @@ export class InstrumentsService {
       resolution.lifecycleStatus === InstrumentLifecycleStatus.ACTIVE ||
       resolution.mappingStatus === 'INFERRED';
 
-    return this.prisma.instrument.upsert({
+    const instrument = await this.prisma.instrument.upsert({
       where: {
         symbol_exchange: {
           symbol: resolution.symbol,
@@ -77,6 +79,15 @@ export class InstrumentsService {
         isActive,
       },
     });
+
+    await this.corporateActions.linkOrphanedEventsAndProcess({
+      id: instrument.id,
+      symbol: instrument.symbol,
+      exchange: instrument.exchange,
+      securityId: instrument.securityId,
+    });
+
+    return instrument;
   }
 
   async resolveMapping(userId: string, symbol: string) {

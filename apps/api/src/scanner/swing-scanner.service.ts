@@ -424,7 +424,11 @@ export class SwingScannerService {
 
     const corporateActionPolicy =
       await this.corporateActions.evaluateForInstrument(
-        instrument.id,
+        {
+          id: instrument.id,
+          symbol: instrument.symbol,
+          exchange: instrument.exchange,
+        },
         candleResponse.candles.map((candle) => ({
           source: candle.source,
           isAdjusted: candle.isAdjusted,

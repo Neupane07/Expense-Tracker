@@ -95,13 +95,21 @@ Deterministic validation rules:
 | No candles | `CANDLES_MISSING` — block |
 | Candles not all `DHAN` + `DHAN_PROVIDER_DAILY_ADJUSTED` | `CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED` — block |
 | Price-affecting imported event not processed | `CORPORATE_ACTION_PENDING_INVALIDATION` — block |
+| Invalidated range not yet rehydrated from Dhan | `CORPORATE_ACTION_REHYDRATION_REQUIRED` — block |
 | Imported catalog present and last successful sync older than 30 days | `CORPORATE_ACTION_SYNC_STALE` — block |
 | Verified adjustment and no blocking event state | history-dependent paths allowed |
 
 On import of price-affecting events (split, bonus, rights, merger, demerger,
 symbol change): delete stored candles with `date < exDate` (or `effectiveDate`
-when `exDate` absent) and delete indicator snapshots for the instrument; require
-explicit indicator recalculation.
+when `exDate` absent) and delete indicator snapshots for the instrument. The
+event remains unprocessed (`processedAt` null) until provider candles before the
+invalidation date are rehydrated from Dhan. `CandlesService` refetches when the
+requested window has a leading gap or pending rehydration events exist; only
+then is `processedAt` set.
+
+Orphaned imported events (`instrumentId` null) are linked to the instrument row
+when `InstrumentsService.findBySymbol` materializes it, then pending invalidation
+runs automatically.
 
 Status endpoints:
 

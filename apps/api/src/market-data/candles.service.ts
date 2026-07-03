@@ -2,12 +2,28 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CorporateActionPolicyService } from './corporate-action-policy.service';
 import { DHAN_CANDLE_ADJUSTMENT_POLICY } from './corporate-action.constants';
+import type { CorporateActionInstrumentRef } from './corporate-action.service';
+import { CorporateActionSyncService } from './corporate-action.service';
 import { DhanMarketDataProviderService } from './dhan-market-data-provider.service';
 import { InstrumentsService } from './instruments.service';
 import { MarketDataQualityService } from './market-data-quality.service';
 
 type DecimalLike = {
   toNumber(): number;
+};
+
+type StoredCandle = {
+  id: string;
+  date: Date;
+  open: DecimalLike;
+  high: DecimalLike;
+  low: DecimalLike;
+  close: DecimalLike;
+  volume: bigint | null;
+  source: string;
+  isAdjusted: boolean;
+  dataQuality?: unknown;
+  warnings: string[];
 };
 
 @Injectable()
@@ -18,6 +34,7 @@ export class CandlesService {
     private readonly provider: DhanMarketDataProviderService,
     private readonly quality: MarketDataQualityService,
     private readonly corporateActionPolicy: CorporateActionPolicyService,
+    private readonly corporateActions: CorporateActionSyncService,
   ) {}
 
   async getDailyCandles(
@@ -32,65 +49,20 @@ export class CandlesService {
       : new Date(toDate.getTime() - 370 * 24 * 60 * 60 * 1000);
 
     let candles = await this.findCandles(instrument.id, fromDate, toDate);
+    const instrumentRef = this.toInstrumentRef(instrument);
 
-    if (candles.length === 0 && instrument.securityId) {
-      const providerCandles = await this.provider.fetchDailyCandles(
-        userId,
-        instrument,
+    const shouldFetchFromProvider =
+      instrument.securityId &&
+      (await this.corporateActions.needsProviderRehydration(
+        instrumentRef,
         fromDate,
-        toDate,
-      );
+        candles,
+      ));
 
-      for (const candle of providerCandles) {
-        if (!candle.open || !candle.high || !candle.low || !candle.close) {
-          continue;
-        }
-
-        const verifiedAt = new Date();
-        const dataQuality =
-          this.corporateActionPolicy.buildCandleAdjustmentDataQuality(
-            verifiedAt,
-          );
-
-        await this.prisma.dailyCandle.upsert({
-          where: {
-            instrumentId_date_source: {
-              instrumentId: instrument.id,
-              date: candle.date,
-              source: candle.source,
-            },
-          },
-          create: {
-            instrumentId: instrument.id,
-            date: candle.date,
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-            volume:
-              candle.volume == null ? null : BigInt(Math.trunc(candle.volume)),
-            source: candle.source,
-            isAdjusted: candle.isAdjusted,
-            dataQuality,
-            warnings: [],
-            rawPayload: candle.rawPayload,
-          },
-          update: {
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-            volume:
-              candle.volume == null ? null : BigInt(Math.trunc(candle.volume)),
-            isAdjusted: candle.isAdjusted,
-            dataQuality,
-            warnings: [],
-            rawPayload: candle.rawPayload,
-          },
-        });
-      }
-
+    if (shouldFetchFromProvider) {
+      await this.hydrateFromProvider(userId, instrument, fromDate, toDate);
       candles = await this.findCandles(instrument.id, fromDate, toDate);
+      await this.corporateActions.completeRehydrationIfReady(instrument.id);
     }
 
     const warnings = this.quality.candleWarnings(candles.length);
@@ -121,6 +93,73 @@ export class CandlesService {
     return response;
   }
 
+  private async hydrateFromProvider(
+    userId: string,
+    instrument: {
+      id: string;
+      symbol: string;
+      exchange: string;
+      securityId: string | null;
+      instrumentType: string;
+    },
+    fromDate: Date,
+    toDate: Date,
+  ) {
+    const providerCandles = await this.provider.fetchDailyCandles(
+      userId,
+      instrument,
+      fromDate,
+      toDate,
+    );
+
+    for (const candle of providerCandles) {
+      if (!candle.open || !candle.high || !candle.low || !candle.close) {
+        continue;
+      }
+
+      const verifiedAt = new Date();
+      const dataQuality =
+        this.corporateActionPolicy.buildCandleAdjustmentDataQuality(verifiedAt);
+
+      await this.prisma.dailyCandle.upsert({
+        where: {
+          instrumentId_date_source: {
+            instrumentId: instrument.id,
+            date: candle.date,
+            source: candle.source,
+          },
+        },
+        create: {
+          instrumentId: instrument.id,
+          date: candle.date,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          volume:
+            candle.volume == null ? null : BigInt(Math.trunc(candle.volume)),
+          source: candle.source,
+          isAdjusted: candle.isAdjusted,
+          dataQuality,
+          warnings: [],
+          rawPayload: candle.rawPayload,
+        },
+        update: {
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          volume:
+            candle.volume == null ? null : BigInt(Math.trunc(candle.volume)),
+          isAdjusted: candle.isAdjusted,
+          dataQuality,
+          warnings: [],
+          rawPayload: candle.rawPayload,
+        },
+      });
+    }
+  }
+
   private findCandles(instrumentId: string, fromDate: Date, toDate: Date) {
     return this.prisma.dailyCandle.findMany({
       where: {
@@ -134,19 +173,21 @@ export class CandlesService {
     });
   }
 
-  serialize(candle: {
+  private toInstrumentRef(instrument: {
     id: string;
-    date: Date;
-    open: DecimalLike;
-    high: DecimalLike;
-    low: DecimalLike;
-    close: DecimalLike;
-    volume: bigint | null;
-    source: string;
-    isAdjusted: boolean;
-    dataQuality?: unknown;
-    warnings: string[];
-  }) {
+    symbol: string;
+    exchange: string;
+    securityId: string | null;
+  }): CorporateActionInstrumentRef {
+    return {
+      id: instrument.id,
+      symbol: instrument.symbol,
+      exchange: instrument.exchange,
+      securityId: instrument.securityId,
+    };
+  }
+
+  serialize(candle: StoredCandle) {
     return {
       id: candle.id,
       date: candle.date,

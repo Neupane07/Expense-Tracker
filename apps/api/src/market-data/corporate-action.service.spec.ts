@@ -13,11 +13,12 @@ import {
 describe('CorporateAction import and invalidation', () => {
   const policy = new CorporateActionPolicyService();
 
+  function createInvalidationService(prisma: Record<string, unknown>) {
+    return new CorporateActionInvalidationService(prisma as never, policy);
+  }
+
   function createImportService(prisma: Record<string, unknown>) {
-    const invalidation = new CorporateActionInvalidationService(
-      prisma as never,
-      policy,
-    );
+    const invalidation = createInvalidationService(prisma);
     return new CorporateActionImportService(
       prisma as never,
       policy,
@@ -120,6 +121,8 @@ describe('CorporateAction import and invalidation', () => {
     expect(first.importedCount).toBe(1);
     expect(candles).toHaveLength(1);
     expect(candles[0].date.toISOString()).toContain('2026-05-15');
+    expect(events[0].processedAt).toBeFalsy();
+    expect(events[0].invalidationFromDate).toBeTruthy();
 
     const duplicate = await importService.importEvents([
       {
@@ -251,6 +254,7 @@ describe('CorporateAction import and invalidation', () => {
       prisma as never,
       policy,
       {} as never,
+      createInvalidationService(prisma),
     );
 
     const result = await syncService.syncFromProvider();
@@ -273,18 +277,113 @@ describe('CorporateAction import and invalidation', () => {
       prisma as never,
       policy,
       {} as never,
+      createInvalidationService(prisma),
     );
 
-    const result = await syncService.evaluateForInstrument('inst-1', [
-      {
-        source: DHAN_MARKET_DATA_SOURCE,
-        isAdjusted: true,
-        dataQuality: { adjustmentPolicy: DHAN_CANDLE_ADJUSTMENT_POLICY },
-      },
-    ]);
+    const result = await syncService.evaluateForInstrument(
+      { id: 'inst-1', symbol: 'INFY', exchange: 'NSE' },
+      [
+        {
+          source: DHAN_MARKET_DATA_SOURCE,
+          isAdjusted: true,
+          dataQuality: { adjustmentPolicy: DHAN_CANDLE_ADJUSTMENT_POLICY },
+        },
+      ],
+    );
 
     expect(result.adjustmentStatus).toBe('VERIFIED');
     expect(result.eventCatalogStatus).toBe('NOT_CONFIGURED');
     expect(result.blocksHistoricalAnalysis).toBe(false);
+  });
+
+  it('keeps invalidated events unprocessed until rehydrated candles exist', async () => {
+    const events: Array<Record<string, unknown>> = [
+      {
+        id: 'evt-1',
+        instrumentId: 'inst-1',
+        supersededAt: null,
+        processedAt: null,
+        invalidationFromDate: new Date('2026-05-01'),
+        eventType: 'SPLIT',
+      },
+    ];
+    const prisma = {
+      corporateActionEvent: {
+        findMany: jest.fn().mockResolvedValue(events),
+        update: jest.fn().mockImplementation(({ where, data }) => {
+          const index = events.findIndex((event) => event.id === where.id);
+          events[index] = { ...events[index], ...data };
+          return Promise.resolve(events[index]);
+        }),
+      },
+      dailyCandle: {
+        count: jest.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(42),
+      },
+    };
+    const invalidation = createInvalidationService(prisma);
+
+    const pending = await invalidation.completeRehydrationIfReady('inst-1');
+    expect(pending.completedCount).toBe(0);
+    expect(events[0].processedAt).toBeFalsy();
+
+    const completed = await invalidation.completeRehydrationIfReady('inst-1');
+    expect(completed.completedCount).toBe(1);
+    expect(events[0].processedAt).toBeTruthy();
+  });
+
+  it('links orphaned events when an instrument row is materialized', async () => {
+    const events: Array<Record<string, unknown>> = [
+      {
+        id: 'evt-orphan',
+        symbol: 'INFY',
+        exchange: 'NSE',
+        instrumentId: null,
+        supersededAt: null,
+        processedAt: null,
+        eventType: 'SPLIT',
+        exDate: new Date('2026-05-01'),
+        effectiveDate: new Date('2026-05-01'),
+        invalidationFromDate: new Date('2026-05-01'),
+      },
+    ];
+    const prisma = {
+      corporateActionEvent: {
+        updateMany: jest.fn().mockImplementation(({ data }) => {
+          events[0] = { ...events[0], ...data };
+          return Promise.resolve({ count: 1 });
+        }),
+        findMany: jest.fn().mockResolvedValue([events[0]]),
+        findUnique: jest
+          .fn()
+          .mockImplementation(({ where }) =>
+            Promise.resolve(
+              events.find((event) => event.id === where.id) ?? null,
+            ),
+          ),
+        update: jest.fn().mockImplementation(({ where, data }) => {
+          const index = events.findIndex((event) => event.id === where.id);
+          events[index] = { ...events[index], ...data };
+          return Promise.resolve(events[index]);
+        }),
+      },
+      dailyCandle: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      technicalIndicatorSnapshot: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const invalidation = createInvalidationService(prisma);
+
+    await invalidation.linkOrphanedEventsForInstrument({
+      id: 'inst-1',
+      symbol: 'INFY',
+      exchange: 'NSE',
+      securityId: '123',
+    });
+
+    expect(events[0].instrumentId).toBe('inst-1');
+    expect(prisma.corporateActionEvent.updateMany).toHaveBeenCalled();
   });
 });

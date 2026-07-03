@@ -137,9 +137,11 @@ Corporate-action readiness checks should show:
 
 - `CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED` when stored candles lack verified Dhan adjustment metadata
 - `CORPORATE_ACTION_PENDING_INVALIDATION` after importing a price-affecting event before invalidation completes
+- `CORPORATE_ACTION_REHYDRATION_REQUIRED` when invalidated candles have not been refetched from Dhan
 - `CORPORATE_ACTION_SYNC_STALE` when an imported event catalog exists but last successful import is older than the configured threshold
 - `HISTORICAL_ANALYSIS_BLOCKED_UNVERIFIED_ADJUSTMENT` on scanner readiness when history cannot be trusted
 - indicator `POST .../indicators/recalculate/:symbol` rejected with `400` when adjustment is unverified
+- the same recalculate path attempts Dhan rehydration first when `CORPORATE_ACTION_REHYDRATION_REQUIRED` would apply to stale stored candles
 
 ## Broker connection tests
 

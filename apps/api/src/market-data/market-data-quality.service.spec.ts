@@ -48,12 +48,19 @@ describe('CandlesService missing candle handling', () => {
       }),
       serialize: jest.fn().mockReturnValue({ symbol: 'INFY' }),
     };
+    const corporateActions = {
+      needsProviderRehydration: jest.fn().mockResolvedValue(false),
+      completeRehydrationIfReady: jest
+        .fn()
+        .mockResolvedValue({ completedCount: 0 }),
+    };
     const service = new CandlesService(
       prisma as never,
       instruments as never,
-      { source: 'DHAN' } as never,
+      { source: 'DHAN', fetchDailyCandles: jest.fn() } as never,
       new MarketDataQualityService(),
       new CorporateActionPolicyService(),
+      corporateActions as never,
     );
 
     const response = await service.getDailyCandles('user-1', 'INFY');

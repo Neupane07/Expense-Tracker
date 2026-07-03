@@ -272,6 +272,15 @@ export class ScannerReadinessService {
     });
 
     if (!instrument) {
+      const orphanedEvents =
+        await this.corporateActions.countBlockingOrphanedEvents(
+          resolution.symbol,
+          resolution.exchange,
+        );
+      if (orphanedEvents > 0) {
+        blockers.push('CORPORATE_ACTION_PENDING_INVALIDATION');
+        warnings.push('CORPORATE_ACTION_PENDING_INVALIDATION');
+      }
       blockers.push('INSTRUMENT_MAPPING_MISSING');
       return {
         id: `symbol:${normalizedSymbol}`,
@@ -325,7 +334,11 @@ export class ScannerReadinessService {
     }
 
     const corporateAction = await this.corporateActions.evaluateForInstrument(
-      instrumentId,
+      {
+        id: instrument.id,
+        symbol: instrument.symbol,
+        exchange: instrument.exchange,
+      },
       candles,
       asOf,
     );

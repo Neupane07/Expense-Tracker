@@ -65,6 +65,7 @@ describe('CorporateActionPolicyService', () => {
           effectiveDate: new Date('2026-05-01'),
           processedAt: null,
           supersededAt: null,
+          invalidationFromDate: null,
         },
       ],
       lastSuccessfulEventSyncAt: new Date('2026-06-01'),
@@ -72,6 +73,32 @@ describe('CorporateActionPolicyService', () => {
 
     expect(result.blocksHistoricalAnalysis).toBe(true);
     expect(result.blockers).toContain('CORPORATE_ACTION_PENDING_INVALIDATION');
+  });
+
+  it('blocks when invalidated history still needs provider rehydration', () => {
+    const result = service.evaluatePolicy({
+      candles: [
+        {
+          source: DHAN_MARKET_DATA_SOURCE,
+          isAdjusted: true,
+          dataQuality: { adjustmentPolicy: DHAN_CANDLE_ADJUSTMENT_POLICY },
+        },
+      ],
+      events: [
+        {
+          eventType: 'SPLIT',
+          exDate: new Date('2026-05-01'),
+          effectiveDate: new Date('2026-05-01'),
+          processedAt: null,
+          supersededAt: null,
+          invalidationFromDate: new Date('2026-05-01'),
+        },
+      ],
+      lastSuccessfulEventSyncAt: new Date('2026-06-01'),
+    });
+
+    expect(result.blocksHistoricalAnalysis).toBe(true);
+    expect(result.blockers).toContain('CORPORATE_ACTION_REHYDRATION_REQUIRED');
   });
 
   it('marks event catalog stale after threshold', () => {
