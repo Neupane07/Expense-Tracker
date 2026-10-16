@@ -1,3 +1,6 @@
+import { AccountChoice, Choice } from "@/components/expenses/expense-controls"
+import { MerchantAliases } from "@/components/expenses/merchant-aliases"
+import type { Account } from "./types"
 import { useState } from "react"
 import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -134,6 +137,7 @@ export function RulesPage() {
 
   return (
     <>
+      <MerchantAliases />
       <Card>
         <CardHeader className="gap-3 md:flex-row md:items-center md:justify-between">
           <CardTitle>Rules</CardTitle>
@@ -229,6 +233,10 @@ function EditRuleDialog({
   onOpenChange: (open: boolean) => void
   onSaved: () => void
 }) {
+  const accounts = useApiQuery<Account[]>("/accounts")
+  const [accountId, setAccountId] = useState(rule.accountId ?? "")
+  const [direction, setDirection] = useState(rule.direction ?? "ALL")
+  const [merchantKey, setMerchantKey] = useState(rule.merchantKey ?? "")
   const [priority, setPriority] = useState(String(rule.priority))
   const [matchType, setMatchType] = useState(rule.matchType)
   const [pattern, setPattern] = useState(rule.pattern)
@@ -246,6 +254,9 @@ function EditRuleDialog({
 
     try {
       await apiPatchJson<Rule>(`/rules/${rule.id}`, {
+        accountId: accountId || null,
+        direction: direction === "ALL" ? null : direction,
+        merchantKey: merchantKey.trim() || null,
         priority: Number(priority),
         matchType,
         pattern,
@@ -265,7 +276,7 @@ function EditRuleDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit rule</DialogTitle>
           <DialogDescription>
@@ -280,6 +291,9 @@ function EditRuleDialog({
             not rewrite history, and manual review edits are protected from rule
             applies.
           </div>
+          <AccountChoice accounts={accounts.data ?? []} value={accountId} onChange={setAccountId} />
+          <Choice label="Direction" value={direction} onChange={setDirection} options={[{value: "ALL", label: "Any direction"}, {value: "IN", label: "Money in"}, {value: "OUT", label: "Money out"}]} />
+          <RuleField label="Normalized merchant (optional)"><Input value={merchantKey} onChange={(e) => setMerchantKey(e.target.value)} /></RuleField>
           <RuleField label="Priority">
             <Input
               type="number"
@@ -358,7 +372,7 @@ function EditRuleDialog({
             onClick={saveRule}
             disabled={
               isSaving ||
-              !pattern.trim() ||
+              (!pattern.trim() && !merchantKey.trim()) ||
               !vendor.trim() ||
               !category.trim() ||
               !priority

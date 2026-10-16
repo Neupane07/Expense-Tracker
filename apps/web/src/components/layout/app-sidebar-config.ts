@@ -1,4 +1,4 @@
-import type { ComponentType } from "react"
+import type { ComponentType } from "react";
 import {
   BarChart3,
   BookOpenText,
@@ -12,31 +12,33 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
-} from "lucide-react"
+} from "lucide-react";
 
 export type NavItem = {
-  href: string
-  label: string
-  icon: ComponentType<{ className?: string; strokeWidth?: number }>
-  adminOnly?: boolean
-}
+  href: string;
+  label: string;
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  adminOnly?: boolean;
+};
 
 export type NavGroup = {
-  id: string
-  label: string
-  caption: string
-  accent: string
-  items: NavItem[]
-}
+  id: string;
+  label: string;
+  caption: string;
+  accent: string;
+  items: NavItem[];
+};
 
 export const navGroups: NavGroup[] = [
   {
     id: "expenses",
     label: "Expenses",
-    caption: "Imports, review & rules",
+    caption: "Accounts, email & review",
     accent: "var(--chart-1)",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+      { href: "/accounts", label: "Accounts", icon: BriefcaseBusiness },
+      { href: "/email", label: "Email intake", icon: ReceiptText },
       { href: "/imports", label: "Imports", icon: FileSpreadsheet },
       { href: "/transactions", label: "Transactions", icon: ReceiptText },
       { href: "/review", label: "Review", icon: ListChecks },
@@ -75,4 +77,4 @@ export const navGroups: NavGroup[] = [
       },
     ],
   },
-]
+];

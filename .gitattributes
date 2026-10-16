@@ -1,0 +1,3 @@
+
+# PDF fixture bytes must not undergo text normalization.
+apps/api/src/email-capture/fixtures/*.pdf binary

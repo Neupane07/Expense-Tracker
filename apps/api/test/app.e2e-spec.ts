@@ -30,6 +30,14 @@ describe('API access boundary (e2e)', () => {
     const server = app.getHttpServer();
 
     await request(server).get('/accounts').expect(401);
+    await request(server).patch('/accounts/guessed').expect(401);
+    await request(server).get('/email-connections').expect(401);
+    await request(server)
+      .get('/email-connections/callback?code=x&state=y')
+      .expect(401);
+    await request(server).get('/source-documents').expect(401);
+    await request(server).get('/source-documents/guessed/download').expect(401);
+    await request(server).post('/review/apply').expect(401);
     await request(server).get('/imports').expect(401);
     await request(server).post('/imports/preview').expect(401);
     await request(server).get('/transactions').expect(401);

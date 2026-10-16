@@ -1,39 +1,42 @@
-import { Navigate, Route, Routes } from "react-router-dom"
-import { AuthProvider } from "@/auth/auth-context"
-import { useAuth } from "@/auth/use-auth"
-import { AppLayout } from "@/components/layout/app-layout"
-import { AdminInvitationsPage } from "@/pages/admin-invitations-page"
-import { DashboardPage } from "@/pages/dashboard-page"
-import { DhanConnectionPage } from "@/pages/dhan-connection-page"
-import { ResearchPage } from "@/pages/research-page"
-import { TradeJournalPage } from "@/pages/trade-journal-page"
-import { SwingScannerPage } from "@/pages/scanner-page"
-import { ImportsPage } from "@/pages/imports-page"
-import { LoadingState } from "@/pages/page-state"
-import { PortfolioPage } from "@/pages/portfolio-page"
-import { ReviewPage } from "@/pages/review-page"
-import { RulesPage } from "@/pages/rules-page"
-import { SignInPage } from "@/pages/sign-in-page"
-import { ToolTesterPage } from "@/pages/tool-tester-page"
-import { TransactionsPage } from "@/pages/transactions-page"
+import { TransactionDetailPage } from "@/pages/transaction-detail-page";
+import { AccountsPage, AccountDetailPage } from "@/pages/accounts-page";
+import { EmailPage } from "@/pages/email-page";
+import { ExpenseReviewPage } from "@/pages/expense-review-page";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "@/auth/auth-context";
+import { useAuth } from "@/auth/use-auth";
+import { AppLayout } from "@/components/layout/app-layout";
+import { AdminInvitationsPage } from "@/pages/admin-invitations-page";
+import { DashboardPage } from "@/pages/dashboard-page";
+import { DhanConnectionPage } from "@/pages/dhan-connection-page";
+import { ResearchPage } from "@/pages/research-page";
+import { TradeJournalPage } from "@/pages/trade-journal-page";
+import { SwingScannerPage } from "@/pages/scanner-page";
+import { ImportsPage } from "@/pages/imports-page";
+import { LoadingState } from "@/pages/page-state";
+import { PortfolioPage } from "@/pages/portfolio-page";
+import { RulesPage } from "@/pages/rules-page";
+import { SignInPage } from "@/pages/sign-in-page";
+import { ToolTesterPage } from "@/pages/tool-tester-page";
+import { TransactionsPage } from "@/pages/transactions-page";
 
 export default function App() {
   return (
     <AuthProvider>
       <AppRoutes />
     </AuthProvider>
-  )
+  );
 }
 
 function AppRoutes() {
-  const { isLoading, user } = useAuth()
+  const { isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
       <div className="mx-auto mt-10 max-w-lg px-4">
         <LoadingState message="Checking sign-in status" />
       </div>
-    )
+    );
   }
 
   if (!user) {
@@ -42,7 +45,7 @@ function AppRoutes() {
         <Route path="/sign-in" element={<SignInPage />} />
         <Route path="*" element={<Navigate to="/sign-in" replace />} />
       </Routes>
-    )
+    );
   }
 
   return (
@@ -50,9 +53,13 @@ function AppRoutes() {
       <Route element={<AppLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/accounts/:id" element={<AccountDetailPage />} />
+        <Route path="/email" element={<EmailPage />} />
         <Route path="/imports" element={<ImportsPage />} />
+        <Route path="/transactions/:id" element={<TransactionDetailPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/review" element={<ReviewPage />} />
+        <Route path="/review" element={<ExpenseReviewPage />} />
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
         <Route path="/scanner" element={<SwingScannerPage />} />
@@ -70,5 +77,5 @@ function AppRoutes() {
       <Route path="/sign-in" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
-  )
+  );
 }

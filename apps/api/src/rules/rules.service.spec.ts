@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access -- Jest asymmetric matchers and transaction mocks */
 import { ExpenseType, MatchType, SourceType } from '../generated/prisma/client';
 import { defaultRules } from '../auth/default-financial-data';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,13 +25,14 @@ describe('RulesService', () => {
         }),
       },
       transaction: {
+        update: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([
           {
             id: 'transaction-credit',
             descriptionClean: 'SANITIZED CARD CREDIT',
             sourceType: SourceType.ICICI_AMAZON_PAY_CARD,
-            moneyOut: { toNumber: () => 0 },
-            moneyIn: { toNumber: () => 20 },
+            moneyOut: 0,
+            moneyIn: 20,
           },
         ]),
       },
@@ -38,7 +40,26 @@ describe('RulesService', () => {
         upsert: jest.fn().mockResolvedValue({}),
       },
     };
-    const service = new RulesService(prisma as unknown as PrismaService);
+    const tx = {
+      ...prisma,
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      reviewBatch: { create: jest.fn().mockResolvedValue({ id: 'batch' }) },
+      classificationChange: { create: jest.fn().mockResolvedValue({}) },
+      transaction: {
+        ...prisma.transaction,
+        findFirst: jest.fn(async () => {
+          const rows = await prisma.transaction.findMany();
+          return rows?.[0]
+            ? { ...rows[0], revision: 0, account: { reviewEverything: false } }
+            : null;
+        }),
+      },
+    };
+    const service = new RulesService({
+      ...prisma,
+      $transaction: async (fn: (client: typeof tx) => Promise<unknown>) =>
+        fn(tx),
+    } as unknown as PrismaService);
 
     await service.apply('user-1', 'expense-rule');
 
@@ -46,9 +67,9 @@ describe('RulesService', () => {
       .calls as unknown as UpsertInput[][];
     const input = calls[0][0];
 
-    expect(input.create.expenseType).toBe(ExpenseType.REFUND);
+    expect(input.create.expenseType).toBe(ExpenseType.REVIEW);
     expect(input.create.ruleId).toBeNull();
-    expect(input.update.expenseType).toBe(ExpenseType.REFUND);
+    expect(input.update.expenseType).toBe(ExpenseType.REVIEW);
     expect(input.update.ruleId).toBeNull();
   });
 
@@ -61,10 +82,30 @@ describe('RulesService', () => {
         }),
       },
       transaction: {
+        update: jest.fn().mockResolvedValue({}),
         findMany: jest.fn(),
       },
     };
-    const service = new RulesService(prisma as unknown as PrismaService);
+    const tx = {
+      ...prisma,
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      reviewBatch: { create: jest.fn().mockResolvedValue({ id: 'batch' }) },
+      classificationChange: { create: jest.fn().mockResolvedValue({}) },
+      transaction: {
+        ...prisma.transaction,
+        findFirst: jest.fn(async () => {
+          const rows = await prisma.transaction.findMany();
+          return rows?.[0]
+            ? { ...rows[0], revision: 0, account: { reviewEverything: false } }
+            : null;
+        }),
+      },
+    };
+    const service = new RulesService({
+      ...prisma,
+      $transaction: async (fn: (client: typeof tx) => Promise<unknown>) =>
+        fn(tx),
+    } as unknown as PrismaService);
 
     await expect(service.apply('user-1', 'inactive-rule')).rejects.toThrow(
       'Inactive rules cannot be applied',
@@ -85,13 +126,14 @@ describe('RulesService', () => {
         aggregate: jest.fn(),
       },
       transaction: {
+        update: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([
           {
             id: 'transaction-review',
             descriptionClean: 'salary received by neft',
             sourceType: SourceType.ICICI_BANK,
-            moneyOut: { toNumber: () => 0 },
-            moneyIn: { toNumber: () => 1000 },
+            moneyOut: 0,
+            moneyIn: 1000,
             category: {
               expenseType: ExpenseType.REVIEW,
               isManual: false,
@@ -101,8 +143,8 @@ describe('RulesService', () => {
             id: 'transaction-manual',
             descriptionClean: 'salary received by neft',
             sourceType: SourceType.ICICI_BANK,
-            moneyOut: { toNumber: () => 0 },
-            moneyIn: { toNumber: () => 1000 },
+            moneyOut: 0,
+            moneyIn: 1000,
             category: {
               expenseType: ExpenseType.INCOME,
               isManual: true,
@@ -114,7 +156,26 @@ describe('RulesService', () => {
         upsert: jest.fn().mockResolvedValue({}),
       },
     };
-    const service = new RulesService(prisma as unknown as PrismaService);
+    const tx = {
+      ...prisma,
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      reviewBatch: { create: jest.fn().mockResolvedValue({ id: 'batch' }) },
+      classificationChange: { create: jest.fn().mockResolvedValue({}) },
+      transaction: {
+        ...prisma.transaction,
+        findFirst: jest.fn(async () => {
+          const rows = await prisma.transaction.findMany();
+          return rows?.[0]
+            ? { ...rows[0], revision: 0, account: { reviewEverything: false } }
+            : null;
+        }),
+      },
+    };
+    const service = new RulesService({
+      ...prisma,
+      $transaction: async (fn: (client: typeof tx) => Promise<unknown>) =>
+        fn(tx),
+    } as unknown as PrismaService);
 
     const summary = await service.createDefaults('user-1');
 

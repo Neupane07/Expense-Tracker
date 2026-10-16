@@ -1,3 +1,6 @@
+import { z } from 'zod';
+import { expenseWhere, parseInput } from '../expense-core/expense-validation';
+import { ReviewService } from '../review/review.service';
 import {
   BadRequestException,
   Injectable,
@@ -8,6 +11,14 @@ import type { TransactionWhereInput } from '../generated/prisma/models/Transacti
 import { PrismaService } from '../prisma/prisma.service';
 
 export type TransactionFilters = {
+  accountId?: string;
+  accountIds?: string;
+  from?: string;
+  to?: string;
+  reviewStatus?: string;
+  confirmation?: string;
+  limit?: string;
+  cursor?: string;
   month?: string;
   sourceType?: string;
   expenseType?: string;
@@ -27,25 +38,54 @@ export type UpdateTransactionCategoryInput = {
 export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(userId: string, filters: TransactionFilters = {}) {
-    return this.prisma.transaction.findMany({
-      where: this.buildWhere(userId, filters),
-      include: {
-        account: true,
-        category: {
-          include: {
-            rule: true,
-          },
+  async findAll(userId: string, filters: TransactionFilters = {}) {
+    const page = parseInput(
+      z.object({
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+        cursor: z.string().optional(),
+        reviewStatus: z
+          .enum(['NEEDS_REVIEW', 'AUTO_ACCEPTED', 'USER_REVIEWED'])
+          .optional(),
+        confirmation: z.enum(['POSTED', 'UNCONFIRMED']).optional(),
+      }),
+      filters,
+    );
+    const where = this.buildWhere(userId, filters);
+    if (page.reviewStatus) where.reviewStatus = page.reviewStatus;
+    if (page.confirmation) where.confirmation = page.confirmation;
+    if (page.cursor) {
+      const cursor = await this.prisma.transaction.findFirst({
+        where: { id: page.cursor, userId },
+      });
+      if (!cursor) throw new BadRequestException('Invalid cursor');
+      where.AND = [
+        {
+          OR: [
+            { transactionDate: { lt: cursor.transactionDate } },
+            { transactionDate: cursor.transactionDate, id: { lt: cursor.id } },
+          ],
         },
+      ];
+    }
+    const rows = await this.prisma.transaction.findMany({
+      where,
+      include: {
+        account: { omit: { statementPassword: true } },
+        category: { include: { rule: true } },
       },
-      orderBy: {
-        transactionDate: 'desc',
-      },
+      orderBy: [{ transactionDate: 'desc' }, { id: 'desc' }],
+      ...(page.limit ? { take: page.limit + 1 } : {}),
     });
+    if (!page.limit) return rows;
+    const items = rows.slice(0, page.limit);
+    return {
+      items,
+      nextCursor: rows.length > page.limit ? items[items.length - 1].id : null,
+    };
   }
 
   private buildWhere(userId: string, filters: TransactionFilters) {
-    const where: TransactionWhereInput = { userId };
+    const where: TransactionWhereInput = { userId, ...expenseWhere(filters) };
     const categoryFilters: NonNullable<
       TransactionWhereInput['category']
     >['is'] = {};
@@ -175,16 +215,12 @@ export class TransactionsService {
             },
           },
           {
-            category: {
-              is: {
-                expenseType: ExpenseType.REVIEW,
-              },
-            },
+            reviewStatus: 'NEEDS_REVIEW',
           },
         ],
       },
       include: {
-        account: true,
+        account: { omit: { statementPassword: true } },
         category: true,
       },
       orderBy: {
@@ -197,8 +233,12 @@ export class TransactionsService {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId },
       include: {
-        account: true,
-        import: true,
+        account: { omit: { statementPassword: true } },
+        import: { omit: { rawFile: true } },
+        observations: {
+          include: { document: { omit: { encryptedBytes: true } } },
+        },
+        decisions: { orderBy: { createdAt: 'desc' } },
         category: {
           include: {
             rule: true,
@@ -245,34 +285,23 @@ export class TransactionsService {
 
     const expenseType = this.parseExpenseType(input.expenseType);
 
-    return this.prisma.transactionCategory.upsert({
-      where: {
-        transactionId: id,
-      },
-      create: {
-        transactionId: id,
+    const review = new ReviewService(this.prisma);
+    const preview = await review.preview(userId, { ids: [id] });
+    await review.apply(userId, {
+      ids: [id],
+      revisions: preview.revisions,
+      overwriteManual: true,
+      category: {
         vendor,
         category,
         subcategory: input.subcategory?.trim() || null,
+        notes: input.notes,
         expenseType,
-        confidence: 100,
-        isManual: true,
-        notes: input.notes?.trim() || null,
       },
-      update: {
-        vendor,
-        category,
-        subcategory: input.subcategory?.trim() || null,
-        expenseType,
-        ruleId: null,
-        confidence: 100,
-        isManual: true,
-        notes: input.notes?.trim() || null,
-      },
-      include: {
-        transaction: true,
-        rule: true,
-      },
+    });
+    return this.prisma.transactionCategory.findUnique({
+      where: { transactionId: id },
+      include: { transaction: true, rule: true },
     });
   }
 }

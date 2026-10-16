@@ -48,6 +48,21 @@ services:
       - internal
       - common
 
+  expense-worker:
+    image: ghcr.io/neupane07/expense-tracker-api:${API_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["node", "apps/api/dist/expense-worker.js"]
+    env_file:
+      - ${EXPENSE_ENV_FILE:-/opt/apps/expense/.env}
+    environment:
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - common
+
   web:
     image: ghcr.io/neupane07/expense-tracker-web:${WEB_IMAGE_TAG:-latest}
     container_name: expense-web

@@ -126,3 +126,34 @@ timing, status, redacted input metadata, and timestamps.
 - Import the client from generated code, not `@prisma/client`.
 - Use `@prisma/adapter-pg` when constructing the client.
 - Every schema change requires a migration and ownership/index review.
+
+## Expense email and history extension (2026-10-04)
+
+Accounts now retain opening/closure dates, independent archive state, currency,
+review preference, and dated source-specific `AccountIdentifier` records. Masked
+identifiers are never global account identities.
+
+`EmailConnection` owns encrypted OAuth credentials and sync generation/watermark.
+`ExpenseJob` stores resumable time windows, page tokens, retries, and renewable
+leases. `EmailOAuthState` stores expiring, user-bound, one-use authorization state.
+`SourceDocument` stores encrypted accepted bytes, source/hash identity, parser
+version, account mapping, statement coverage metadata, and deletion tombstones.
+`SourceObservation` links original extracted rows to canonical transactions;
+several sources can support one transaction. User/account relation constraints
+preserve tenant ownership. Unresolved observations are excluded from spend totals.
+
+Transactions add confirmation, currency, posting date, independent review state,
+merchant key, decision revision, and optional transfer/refund links. Legacy import
+links remain; email transactions need no fictitious Import. `ReviewBatch` and
+`ClassificationChange` retain previous classifications for conflict-aware undo.
+Rules can be account/direction/merchant scoped. Source deletion scrubs observation
+payloads but retains financial records and suppression identity.
+
+Original source files absent from legacy imports remain unavailable; their old
+inferred statement boundaries do not establish verified coverage. See
+[Email capture](EMAIL_CAPTURE.md) for encryption, template gates, and deployment.
+
+`MerchantAlias` maps a user's normalized alternate name directly to a canonical
+merchant key. Aliases affect future observations; they do not reclassify history.
+Legacy `SourceDocument` references use `ORIGINAL_UNAVAILABLE` and no invented bytes
+or statement coverage. Full extracted rows are retained once in document metadata.

@@ -328,6 +328,7 @@ export class AuthService {
         await transaction.rule.createMany({
           data: defaultRules.map((rule) => ({
             ...rule,
+            origin: 'STARTER',
             userId: user.id,
           })),
         });

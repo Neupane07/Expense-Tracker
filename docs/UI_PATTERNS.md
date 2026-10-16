@@ -220,3 +220,13 @@ Do not create custom styled controls if shadcn/ui has a matching component.
 - Mobile and tablet (`<lg`) use a full-height `Sheet` drawer: brand row with integrated close control, scrollable nav with larger tap targets, and a footer showing the signed-in user (initials avatar). Nav links close the sheet via `onClick`, not `SheetClose` wrappers (avoids stray focus rings).
 - Sidebar nav ([app-sidebar-nav.tsx](apps/web/src/components/layout/app-sidebar-nav.tsx)): grouped sections with accent dot, short caption, dividers between groups, and items with rounded icon tiles tinted by section chart color (`--chart-1` expenses, `--chart-2` finance OS, `--chart-4` admin). Active item uses tinted background, inset ring, semibold label, and trailing accent dot.
 - Header shows app name, page title, sign-out, and user email on `md+`; the menu button only appears below `lg`.
+
+## Expense history and automation
+
+Accounts defaults to active accounts; closed/archived accounts remain selectable
+in historical filters. Review groups exceptions and requires a preview before
+a remembered bulk decision. Email intake discloses mailbox-wide permission, shows
+parser failures/password prompts, and offers explicit account mapping. Password
+retention is unchecked by default. Transaction details expose source evidence,
+classification reasons and decision history. Long-range charts use the selected
+period, monthly through five years and yearly beyond, with missing periods as gaps.

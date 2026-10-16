@@ -21,6 +21,7 @@ describe('AccountsService', () => {
     });
 
     expect(prisma.account.create).toHaveBeenCalledWith({
+      omit: { statementPassword: true },
       data: {
         userId: 'user-1',
         name: 'ICICI Bank Account',

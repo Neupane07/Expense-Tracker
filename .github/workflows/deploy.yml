@@ -65,9 +65,14 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -eu
             cd /opt/apps/expense
+            export API_IMAGE_TAG=${{ github.sha }}
+            export WEB_IMAGE_TAG=${{ github.sha }}
+            docker compose config --services | grep -qx expense-worker || { echo 'Install the updated deploy/docker-compose.prod.yml as /opt/apps/expense/compose.yml before deploying.'; exit 1; }
             docker compose pull
-            docker compose stop api web
+            docker compose run --rm --no-deps api node -e 'const e = process.env; const valid = (v) => /^[a-f0-9]{64}$/i.test(v || ""); if (!valid(e.EXPENSE_DATA_KEY)) { console.error("Configure EXPENSE_DATA_KEY before deploying; existing keys must not be regenerated."); process.exit(1); } if (e.EXPENSE_GMAIL_ENABLED === "true" && (!valid(e.EXPENSE_TOKEN_KEY) || e.EXPENSE_TOKEN_KEY === e.EXPENSE_DATA_KEY || !e.EXPENSE_GOOGLE_CLIENT_ID || !e.EXPENSE_GOOGLE_CLIENT_SECRET || !e.EXPENSE_GOOGLE_CALLBACK_URL)) { console.error("Complete the separate expense-mail OAuth settings and independent token key before enabling Gmail."); process.exit(1); }'
+            docker compose stop api web expense-worker
             docker compose up -d postgres
             docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy --config apps/api/prisma.config.ts
             docker compose up -d --wait --wait-timeout 90

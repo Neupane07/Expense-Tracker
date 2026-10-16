@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react"
+import { AccountChoice, Choice } from "@/components/expenses/expense-controls";
+import type { Account } from "./types";
+import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -12,24 +14,24 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from "recharts"
-import { Badge } from "@/components/ui/badge"
+} from "recharts";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -37,9 +39,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { MetricCard } from "@/components/metric-card"
-import { buildQuery } from "@/lib/api-client"
+} from "@/components/ui/table";
+import { MetricCard } from "@/components/metric-card";
+import { buildQuery } from "@/lib/api-client";
 import {
   dashboardPresets,
   defaultDashboardPeriod,
@@ -52,18 +54,18 @@ import {
   transitionPreset,
   type DashboardPeriod,
   type DashboardPresetId,
-} from "@/lib/dashboard-period"
-import { formatMoney, formatPercent } from "@/lib/format"
-import { useApiQuery } from "@/lib/use-api-query"
+} from "@/lib/dashboard-period";
+import { formatMoney, formatPercent } from "@/lib/format";
+import { useApiQuery } from "@/lib/use-api-query";
 import type {
   DashboardChartRow,
   DashboardCharts,
   DashboardSummary,
   MonthlyTrendRow,
-} from "@/pages/types"
-import { EmptyState, ErrorState, LoadingState } from "./page-state"
+} from "@/pages/types";
+import { EmptyState, ErrorState, LoadingState } from "./page-state";
 
-const CATEGORY_PIE_LIMIT = 8
+const CATEGORY_PIE_LIMIT = 8;
 
 const chartColors = [
   "var(--chart-1)",
@@ -71,26 +73,70 @@ const chartColors = [
   "var(--chart-3)",
   "var(--chart-4)",
   "var(--chart-5)",
-]
+];
 
 export function DashboardPage() {
-  const [period, setPeriod] = useState<DashboardPeriod>(defaultDashboardPeriod)
+  const [period, setPeriod] = useState<DashboardPeriod>(defaultDashboardPeriod);
 
-  const queryString = useMemo(() => buildQuery(periodToQuery(period)), [period])
-  const skipQuery = isCustomRangeInvalid(period)
-  const summaryPath = skipQuery ? "" : `/dashboard/summary${queryString}`
-  const chartsPath = skipQuery ? "" : `/dashboard/charts${queryString}`
+  const [accountId, setAccountId] = useState("");
+  const [aggregation, setAggregation] = useState("auto");
+  const accounts = useApiQuery<Account[]>("/accounts");
+  const queryString = useMemo(
+    () => buildQuery({ ...periodToQuery(period), accountId, aggregation }),
+    [period, accountId, aggregation],
+  );
+  const skipQuery = isCustomRangeInvalid(period);
+  const summaryPath = skipQuery ? "" : `/dashboard/summary${queryString}`;
+  const chartsPath = skipQuery ? "" : `/dashboard/charts${queryString}`;
 
-  const summaryQuery = useApiQuery<DashboardSummary>(summaryPath)
-  const chartsQuery = useApiQuery<DashboardCharts>(chartsPath)
+  const summaryQuery = useApiQuery<DashboardSummary>(summaryPath);
+  const chartsQuery = useApiQuery<DashboardCharts>(chartsPath);
 
-  const periodLabel = describePeriod(period)
+  const periodLabel = describePeriod(period);
 
-  const isLoading = summaryQuery.isLoading || chartsQuery.isLoading
-  const error = summaryQuery.error ?? chartsQuery.error
+  const isLoading = summaryQuery.isLoading || chartsQuery.isLoading;
+  const error = summaryQuery.error ?? chartsQuery.error;
 
   return (
     <div className="space-y-5">
+      <Card>
+        <CardContent className="grid gap-4 p-4 md:grid-cols-2">
+          <AccountChoice
+            accounts={accounts.data ?? []}
+            value={accountId}
+            onChange={setAccountId}
+          />
+          <Choice
+            label="Trend interval"
+            value={aggregation}
+            onChange={setAggregation}
+            options={[
+              { value: "auto", label: "Automatic" },
+              { value: "month", label: "Monthly" },
+              { value: "year", label: "Yearly" },
+            ]}
+          />
+        </CardContent>
+      </Card>
+      {summaryQuery.data && (
+        <Card>
+          <CardContent className="space-y-2 p-4">
+            <p>
+              Statement-confirmed:{" "}
+              {formatMoney(summaryQuery.data.confirmedExpense ?? 0)} ·
+              Additional unconfirmed:{" "}
+              {formatMoney(summaryQuery.data.unconfirmedExpense ?? 0)} ·
+              Possible duplicates: {summaryQuery.data.possibleDuplicates ?? 0} · Unresolved debits: {formatMoney(summaryQuery.data.unresolvedMoneyOut ?? 0)} · Unresolved credits: {formatMoney(summaryQuery.data.unresolvedMoneyIn ?? 0)}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {chartsQuery.data?.coverageNote}{" "}
+              <a href={accountId ? `/accounts/${accountId}` : "/accounts"}>
+                View statement coverage
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+      )}
       <PeriodFilterCard
         period={period}
         onChange={setPeriod}
@@ -113,7 +159,7 @@ export function DashboardPage() {
         <ErrorState message="Dashboard data is unavailable" />
       )}
     </div>
-  )
+  );
 }
 
 function DashboardContent({
@@ -121,11 +167,11 @@ function DashboardContent({
   charts,
   periodLabel,
 }: {
-  summary: DashboardSummary
-  charts: DashboardCharts
-  periodLabel: string
+  summary: DashboardSummary;
+  charts: DashboardCharts;
+  periodLabel: string;
 }) {
-  const netExpense = summary.totalExpense - summary.refunds
+  const netExpense = summary.totalExpense - summary.refunds;
 
   return (
     <div className="space-y-5">
@@ -215,7 +261,7 @@ function DashboardContent({
 
       <MonthlyTrendCard data={charts.monthlyTrend} />
     </div>
-  )
+  );
 }
 
 function PeriodFilterCard({
@@ -223,16 +269,16 @@ function PeriodFilterCard({
   onChange,
   periodLabel,
 }: {
-  period: DashboardPeriod
-  onChange: (period: DashboardPeriod) => void
-  periodLabel: string
+  period: DashboardPeriod;
+  onChange: (period: DashboardPeriod) => void;
+  periodLabel: string;
 }) {
-  const showMonthInput = period.preset === "custom-month"
-  const showRangeInputs = period.preset === "custom-range"
-  const rangeInvalid = isCustomRangeInvalid(period)
+  const showMonthInput = period.preset === "custom-month";
+  const showRangeInputs = period.preset === "custom-range";
+  const rangeInvalid = isCustomRangeInvalid(period);
   const presetLabel =
     dashboardPresets.find((preset) => preset.id === period.preset)?.label ??
-    "Custom"
+    "Custom";
 
   return (
     <Card>
@@ -320,15 +366,15 @@ function PeriodFilterCard({
         ) : null}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function CategoryPieCard({ data }: { data: DashboardChartRow[] }) {
   const pieData = useMemo(
     () => collapseLongTail(data, CATEGORY_PIE_LIMIT),
     [data],
-  )
-  const total = data.reduce((sum, row) => sum + row.amount, 0)
+  );
+  const total = data.reduce((sum, row) => sum + row.amount, 0);
 
   return (
     <Card>
@@ -411,11 +457,11 @@ function CategoryPieCard({ data }: { data: DashboardChartRow[] }) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function CategoryBreakdownCard({ data }: { data: DashboardChartRow[] }) {
-  const visible = data.slice(0, 8)
+  const visible = data.slice(0, 8);
 
   return (
     <Card>
@@ -441,7 +487,7 @@ function CategoryBreakdownCard({ data }: { data: DashboardChartRow[] }) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function CategoryRow({
@@ -450,12 +496,12 @@ function CategoryRow({
   percent,
   color,
 }: {
-  label: string
-  amount: number
-  percent: number
-  color: string
+  label: string;
+  amount: number;
+  percent: number;
+  color: string;
 }) {
-  const width = Math.min(Math.max(percent, 0), 100)
+  const width = Math.min(Math.max(percent, 0), 100);
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 text-sm">
@@ -478,7 +524,7 @@ function CategoryRow({
         />
       </div>
     </div>
-  )
+  );
 }
 
 function SpendBarCard({
@@ -487,12 +533,12 @@ function SpendBarCard({
   data,
   color,
 }: {
-  title: string
-  description: string
-  data: DashboardChartRow[]
-  color: string
+  title: string;
+  description: string;
+  data: DashboardChartRow[];
+  color: string;
 }) {
-  const top = data.slice(0, 10)
+  const top = data.slice(0, 10);
 
   return (
     <Card>
@@ -557,21 +603,21 @@ function SpendBarCard({
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function MonthlyTrendCard({ data }: { data: MonthlyTrendRow[] }) {
   const labelled = useMemo(
     () => data.map((row) => ({ ...row, label: formatMonthShort(row.month) })),
     [data],
-  )
+  );
 
   return (
     <Card>
       <CardHeader className="gap-1">
         <CardTitle>Monthly trend</CardTitle>
         <CardDescription>
-          Last 12 months of expenses, independent of the filter above.
+          Selected period of expenses, independent of the filter above.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -608,8 +654,8 @@ function MonthlyTrendCard({ data }: { data: MonthlyTrendRow[] }) {
                   labelFormatter={(label, payload) => {
                     const month = payload?.[0]?.payload?.month as
                       | string
-                      | undefined
-                    return month ? formatMonthLong(month) : String(label)
+                      | undefined;
+                    return month ? formatMonthLong(month) : String(label);
                   }}
                   formatter={(value) => formatMoney(Number(value))}
                   contentStyle={{
@@ -635,26 +681,26 @@ function MonthlyTrendCard({ data }: { data: MonthlyTrendRow[] }) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function shareHint(value: number, total: number) {
   if (total <= 0 || value <= 0) {
-    return undefined
+    return undefined;
   }
-  const share = (value / total) * 100
-  return `${formatPercent(Math.round(share * 10) / 10)} of total`
+  const share = (value / total) * 100;
+  return `${formatPercent(Math.round(share * 10) / 10)} of total`;
 }
 
 function collapseLongTail(rows: DashboardChartRow[], limit: number) {
   if (rows.length <= limit) {
-    return rows
+    return rows;
   }
 
-  const head = rows.slice(0, limit - 1)
-  const tail = rows.slice(limit - 1)
-  const tailAmount = tail.reduce((sum, row) => sum + row.amount, 0)
-  const tailPercent = tail.reduce((sum, row) => sum + (row.percent ?? 0), 0)
+  const head = rows.slice(0, limit - 1);
+  const tail = rows.slice(limit - 1);
+  const tailAmount = tail.reduce((sum, row) => sum + row.amount, 0);
+  const tailPercent = tail.reduce((sum, row) => sum + (row.percent ?? 0), 0);
 
   return [
     ...head,
@@ -663,48 +709,48 @@ function collapseLongTail(rows: DashboardChartRow[], limit: number) {
       amount: Math.round(tailAmount * 100) / 100,
       percent: Math.round(tailPercent * 10) / 10,
     },
-  ]
+  ];
 }
 
 function compactMoney(value: number) {
   if (value >= 100000) {
-    return `\u20B9${Math.round(value / 100000)}L`
+    return `\u20B9${Math.round(value / 100000)}L`;
   }
 
   if (value >= 1000) {
-    return `\u20B9${Math.round(value / 1000)}k`
+    return `\u20B9${Math.round(value / 1000)}k`;
   }
 
-  return `\u20B9${value}`
+  return `\u20B9${value}`;
 }
 
 function formatMonthShort(monthKey: string) {
-  const [year, month] = monthKey.split("-").map(Number)
+  const [year, month] = monthKey.split("-").map(Number);
   if (!year || !month) {
-    return monthKey
+    return monthKey;
   }
   return new Intl.DateTimeFormat("en-IN", {
     month: "short",
     year: "2-digit",
-  }).format(new Date(year, month - 1, 1))
+  }).format(new Date(year, month - 1, 1));
 }
 
 function formatMonthLong(monthKey: string) {
-  const [year, month] = monthKey.split("-").map(Number)
+  const [year, month] = monthKey.split("-").map(Number);
   if (!year || !month) {
-    return monthKey
+    return monthKey;
   }
   return new Intl.DateTimeFormat("en-IN", {
     month: "long",
     year: "numeric",
-  }).format(new Date(year, month - 1, 1))
+  }).format(new Date(year, month - 1, 1));
 }
 
 function formatSourceType(sourceType: string) {
   const labels: Record<string, string> = {
     ICICI_AMAZON_PAY_CARD: "ICICI Amazon Pay Card",
     ICICI_BANK: "ICICI Bank/UPI",
-  }
+  };
 
-  return labels[sourceType] ?? sourceType
+  return labels[sourceType] ?? sourceType;
 }

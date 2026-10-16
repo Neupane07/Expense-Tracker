@@ -200,3 +200,12 @@ validation, suggested quantity, and manual Dhan Super Order parameters.
 The application has no normal path for broker writes. Automated order
 placement, modification, cancellation, stop-loss trailing, MTF/leverage, and
 F&O remain outside the architecture.
+
+## Expense capture process
+
+`expense-worker.ts` runs from the API image with PostgreSQL leases; it does not
+serve HTTP. `email-capture` owns Gmail collection, isolated PDF parsing, source
+storage, and observation reconciliation. `expense-core` owns encryption, shared
+filters and classification. `review` owns merchant aliases, remembered decisions
+and revision-aware undo. Uploads use the same evidence pipeline. No portfolio
+module depends on this connector. See `EMAIL_CAPTURE.md` for deployment gates.
