@@ -1,3 +1,4 @@
+import { SourceDocumentsService } from '../email-capture/source-documents.service';
 import {
   BadRequestException,
   ConflictException,
@@ -5,18 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import {
-  ExpenseType,
-  ImportStatus,
-  MatchType,
-  Rule,
-  SourceType,
-} from '../generated/prisma/client';
+import { ImportStatus, SourceType } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { getProtectedAutomaticCategory } from './automatic-category-protection';
 import { IciciAmazonCardParser } from './parsers/icici-amazon-card.parser';
 import { IciciBankParser } from './parsers/icici-bank.parser';
-import { ParsedStatementRow } from './parsers/statement-parser.interface';
 import { readStatementFile } from './parsers/statement-file.reader';
 
 type ImportPreviewInput = {
@@ -31,6 +24,7 @@ export class ImportsService {
     private readonly prisma: PrismaService,
     private readonly iciciBankParser: IciciBankParser,
     private readonly iciciAmazonCardParser: IciciAmazonCardParser,
+    private readonly documents: SourceDocumentsService,
   ) {}
 
   async preview(userId: string, input: ImportPreviewInput) {
@@ -52,170 +46,84 @@ export class ImportsService {
       userId,
       input,
     );
+    if (file.buffer.length > 15 * 1024 * 1024)
+      throw new BadRequestException('File exceeds 15 MB');
     const fileHash = this.hashBuffer(file.buffer);
-    const importRecord = await this.createImportRecord({
-      accountId,
-      userId,
-      sourceType,
-      fileName: file.originalname,
-      fileHash,
+    const prior = await this.prisma.import.findUnique({
+      where: { fileHash_accountId: { fileHash, accountId } },
     });
-
-    try {
-      const preview = this.parseFileForPreview(file, sourceType);
-      const rules = await this.prisma.rule.findMany({
-        where: {
-          userId,
-          isActive: true,
-        },
-        orderBy: [
-          {
-            priority: 'asc',
-          },
-          {
-            createdAt: 'asc',
-          },
-        ],
-      });
-      const existingHashes = new Set(
-        (
-          await this.prisma.transaction.findMany({
-            where: {
-              userId,
-              transactionHash: {
-                in: preview.rows.map((row) =>
-                  this.createTransactionHash(accountId, row),
-                ),
-              },
-            },
-            select: {
-              transactionHash: true,
-            },
-          })
-        ).map((transaction) => transaction.transactionHash),
+    if (prior && prior.status !== 'FAILED')
+      throw new ConflictException(
+        'This file has already been imported for this account.',
       );
-      const seenHashes = new Set<string>();
-      let importedRows = 0;
-      let duplicateRows = 0;
-      let failedRows = preview.stats.errors.length;
-
-      for (const row of preview.rows) {
-        const transactionHash = this.createTransactionHash(accountId, row);
-
-        if (
-          existingHashes.has(transactionHash) ||
-          seenHashes.has(transactionHash)
-        ) {
-          duplicateRows += 1;
-          continue;
-        }
-
-        try {
-          const matchedRule = this.findMatchingRule(
-            rules,
-            row.descriptionClean,
-          );
-          const protectedCategory = getProtectedAutomaticCategory(
-            row,
-            matchedRule?.expenseType,
-          );
-          const transaction = await this.prisma.transaction.create({
-            data: {
-              userId,
-              accountId,
-              importId: importRecord.id,
-              transactionDate: this.parseTransactionDate(row.transactionDate),
-              descriptionRaw: row.descriptionRaw,
-              descriptionClean: row.descriptionClean,
-              moneyOut: row.moneyOut,
-              moneyIn: row.moneyIn,
-              netAmount: row.netAmount,
-              balance: row.balance,
-              referenceNumber: row.referenceNumber,
-              transactionHash,
-              sourceType,
-              paymentMethod: row.paymentMethod,
-            },
-          });
-
-          await this.prisma.transactionCategory.create({
-            data: protectedCategory
-              ? {
-                  transactionId: transaction.id,
-                  ...protectedCategory,
-                  ruleId: null,
-                  isManual: false,
-                }
-              : matchedRule
-                ? {
-                    transactionId: transaction.id,
-                    vendor: matchedRule.vendor,
-                    category: matchedRule.category,
-                    subcategory: matchedRule.subcategory,
-                    expenseType: matchedRule.expenseType,
-                    ruleId: matchedRule.id,
-                    confidence: 100,
-                    isManual: false,
-                  }
-                : {
-                    transactionId: transaction.id,
-                    vendor: 'Manual Review',
-                    category: 'Manual Review',
-                    expenseType: ExpenseType.REVIEW,
-                    confidence: 0,
-                    isManual: false,
-                    notes: 'No matching rule found during import.',
-                  },
-          });
-
-          seenHashes.add(transactionHash);
-          importedRows += 1;
-        } catch {
-          failedRows += 1;
-        }
-      }
-
-      const updatedImport = await this.prisma.import.update({
-        where: {
-          id: importRecord.id,
-        },
-        data: {
-          status: ImportStatus.COMPLETED,
-          statementFrom: this.getStatementBoundary(preview.rows, 'from'),
-          statementTo: this.getStatementBoundary(preview.rows, 'to'),
-          totalRows: preview.stats.totalRowsScanned,
-          importedRows,
-          duplicateRows,
-          failedRows,
-        },
-      });
-
-      return {
-        importId: updatedImport.id,
+    const record =
+      prior ??
+      (await this.createImportRecord({
+        userId,
         accountId,
         sourceType,
-        fileName: updatedImport.fileName,
-        status: updatedImport.status,
-        totalRows: updatedImport.totalRows,
-        importedRows: updatedImport.importedRows,
-        duplicateRows: updatedImport.duplicateRows,
-        failedRows: updatedImport.failedRows,
+        fileName: file.originalname,
+        fileHash,
+      }));
+    try {
+      const documentId = await this.documents.ingest({
+        userId,
+        accountId,
+        sourceKey: `upload:${accountId}:${fileHash}`,
+        bytes: file.buffer,
+        kind: 'UPLOAD',
+        fileName: file.originalname,
+        mimeType: file.mimetype ?? 'application/octet-stream',
+        metadata: { sourceType, importId: record.id },
+      });
+      const preview = this.parseFileForPreview(file, sourceType);
+      const doc = await this.documents.detail(userId, documentId);
+      if (doc.errorCode) throw new BadRequestException(doc.errorCode);
+      const ids = doc.observations.flatMap((o) =>
+        o.transactionId ? [o.transactionId] : [],
+      );
+      const assigned = await this.prisma.transaction.updateMany({
+        where: {
+          userId,
+          id: { in: ids },
+          importId: null,
+          transactionHash: { startsWith: 'observation:' },
+        },
+        data: { importId: record.id },
+      });
+      const unresolved = doc.observations.filter(
+        (o) => !o.transactionId,
+      ).length;
+      const updated = await this.prisma.import.update({
+        where: { id: record.id },
+        data: {
+          status: unresolved ? ImportStatus.PARSED : ImportStatus.COMPLETED,
+          totalRows: preview.stats.totalRowsScanned,
+          importedRows: assigned.count,
+          duplicateRows: ids.length - assigned.count,
+          failedRows: unresolved,
+          rawKeyVersion: `source-document:${documentId}`,
+          rowErrors: preview.stats.errors,
+          errorMessage: unresolved
+            ? 'Possible duplicates require resolution in Email intake.'
+            : null,
+        },
+      });
+      return {
+        ...updated,
+        rawFile: undefined,
+        importId: record.id,
         errors: preview.stats.errors,
       };
     } catch (error) {
       await this.prisma.import.update({
-        where: {
-          id: importRecord.id,
-        },
+        where: { id: record.id },
         data: {
           status: ImportStatus.FAILED,
           errorMessage:
-            error instanceof Error
-              ? error.message
-              : 'Failed to import statement',
+            error instanceof Error ? error.message : 'Import failed',
         },
       });
-
       throw error;
     }
   }
@@ -223,8 +131,9 @@ export class ImportsService {
   findAll(userId: string) {
     return this.prisma.import.findMany({
       where: { userId },
+      omit: { rawFile: true },
       include: {
-        account: true,
+        account: { omit: { statementPassword: true } },
         _count: {
           select: {
             transactions: true,
@@ -240,8 +149,9 @@ export class ImportsService {
   async findOne(userId: string, id: string) {
     const importRecord = await this.prisma.import.findUnique({
       where: { id_userId: { id, userId } },
+      omit: { rawFile: true },
       include: {
-        account: true,
+        account: { omit: { statementPassword: true } },
         transactions: {
           include: {
             category: true,
@@ -376,65 +286,7 @@ export class ImportsService {
     }
   }
 
-  private createTransactionHash(accountId: string, row: ParsedStatementRow) {
-    const parts = [
-      accountId,
-      row.transactionDate,
-      row.descriptionClean.toLowerCase(),
-      row.moneyOut.toFixed(2),
-      row.moneyIn.toFixed(2),
-      row.referenceNumber?.trim().toLowerCase() ?? '',
-    ];
-
-    return createHash('sha256').update(parts.join('|')).digest('hex');
-  }
-
   private hashBuffer(buffer: Buffer) {
     return createHash('sha256').update(buffer).digest('hex');
-  }
-
-  private findMatchingRule(rules: Rule[], description: string) {
-    return rules.find((rule) => this.ruleMatches(rule, description));
-  }
-
-  private ruleMatches(rule: Rule, description: string) {
-    const normalizedDescription = description.toLowerCase();
-    const normalizedPattern = rule.pattern.toLowerCase();
-
-    switch (rule.matchType) {
-      case MatchType.CONTAINS:
-        return normalizedDescription.includes(normalizedPattern);
-      case MatchType.EXACT:
-        return normalizedDescription === normalizedPattern;
-      case MatchType.STARTS_WITH:
-        return normalizedDescription.startsWith(normalizedPattern);
-      case MatchType.REGEX:
-        try {
-          return new RegExp(rule.pattern, 'i').test(description);
-        } catch {
-          return false;
-        }
-    }
-  }
-
-  private parseTransactionDate(value: string) {
-    return new Date(`${value}T00:00:00.000Z`);
-  }
-
-  private getStatementBoundary(
-    rows: ParsedStatementRow[],
-    boundary: 'from' | 'to',
-  ) {
-    if (rows.length === 0) {
-      return null;
-    }
-
-    const timestamps = rows.map((row) =>
-      this.parseTransactionDate(row.transactionDate).getTime(),
-    );
-    const timestamp =
-      boundary === 'from' ? Math.min(...timestamps) : Math.max(...timestamps);
-
-    return new Date(timestamp);
   }
 }

@@ -102,3 +102,17 @@ Existing rows are updated only through an explicit apply action:
 This keeps historical data stable and avoids surprising changes after a user
 has already reviewed a statement. The UI should explain this before rule edits
 and show how many matching rows were updated when a rule is applied.
+
+## Evidence-aware imports
+
+Every newly accepted upload retains its original encrypted source before parsing.
+Failed documents stay visible and retryable. Observations reconcile into canonical
+transactions atomically; delivery identity is separate from financial matching.
+Legacy evidence links explicitly mark unavailable originals. Statement periods
+must come from metadata; transaction extrema never prove coverage.
+
+Known incoming card repayments and outgoing bank card payments are transfers.
+An unspecified bill payment does not establish a card repayment. Incoming refunds
+need explicit evidence; outgoing reversals and unexplained credits require review.
+Unknown debits stay unresolved unless a compatible explicit rule matches. Manual
+classifications are protected. Review state is independent of expense type.

@@ -78,6 +78,11 @@ model User {
   name                    String?
   avatarUrl               String?
   role                    Role                     @default(MEMBER)
+  emailConnections        EmailConnection[]
+  sourceDocuments         SourceDocument[]
+  expenseJobs             ExpenseJob[]
+  reviewBatches           ReviewBatch[]
+  merchantAliases         MerchantAlias[]
   accounts                Account[]
   imports                 Import[]
   transactions            Transaction[]
@@ -143,6 +148,15 @@ model Account {
   institution  String
   type         AccountType
   lastFour     String?
+  openedAt     DateTime? @db.Date
+  closedAt     DateTime? @db.Date
+  archivedAt   DateTime?
+  currency     String @default("INR")
+  reviewEverything Boolean @default(false)
+  statementPassword String?
+  identifiers AccountIdentifier[]
+  documents SourceDocument[]
+  scopedRules Rule[]
   imports      Import[]
   transactions Transaction[]
   createdAt    DateTime      @default(now())
@@ -170,6 +184,9 @@ model Import {
   failedRows    Int          @default(0)
   errorMessage  String?
   transactions  Transaction[]
+  rawFile Bytes?
+  rawKeyVersion String?
+  rowErrors Json?
   createdAt     DateTime     @default(now())
 
   @@unique([fileHash, accountId])
@@ -183,8 +200,8 @@ model Transaction {
   user             User        @relation(fields: [userId], references: [id])
   accountId        String
   account          Account     @relation(fields: [accountId, userId], references: [id, userId])
-  importId         String
-  import           Import      @relation(fields: [importId, userId], references: [id, userId])
+  importId         String?
+  import           Import?      @relation(fields: [importId, userId], references: [id, userId])
   transactionDate  DateTime
   descriptionRaw   String
   descriptionClean String
@@ -196,9 +213,21 @@ model Transaction {
   transactionHash  String
   sourceType       SourceType
   paymentMethod    String?
+  postingDate      DateTime? @db.Date
+  currency         String @default("INR")
+  confirmation     String @default("POSTED")
+  reviewStatus     String @default("NEEDS_REVIEW")
+  reviewReason     String?
+  merchantKey      String?
+  revision         Int @default(0)
+  transferPairId   String?
+  reversalOfId     String?
+  observations     SourceObservation[]
+  decisions        ClassificationChange[]
   category         TransactionCategory?
   createdAt        DateTime    @default(now())
 
+  @@unique([id, userId])
   @@unique([userId, transactionHash])
   @@index([userId, transactionDate])
   @@index([userId, accountId])
@@ -227,6 +256,11 @@ model Rule {
   userId      String
   user        User        @relation(fields: [userId], references: [id])
   priority    Int
+  accountId   String?
+  account     Account? @relation(fields: [accountId, userId], references: [id, userId])
+  direction   String?
+  merchantKey String?
+  origin      String @default("USER")
   matchType   MatchType
   pattern     String
   vendor      String
@@ -890,4 +924,153 @@ model McpAccessToken {
   @@index([userId])
   @@index([revokedAt])
   @@index([expiresAt])
+}
+
+
+model AccountIdentifier {
+  id String @id @default(cuid())
+  accountId String
+  userId String
+  account Account @relation(fields: [accountId, userId], references: [id, userId])
+  value String
+  sourceType SourceType
+  validFrom DateTime? @db.Date
+  validTo DateTime? @db.Date
+  createdAt DateTime @default(now())
+  @@unique([accountId, value, sourceType])
+  @@index([userId, value])
+}
+
+model EmailConnection {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  email String
+  googleSubject String
+  refreshToken String?
+  status String @default("PREVIEW")
+  lastCheckedAt DateTime?
+  watermark DateTime?
+  nextPollAt DateTime @default(now())
+  errorCode String?
+  generation Int @default(0)
+  documents SourceDocument[]
+  jobs ExpenseJob[]
+  createdAt DateTime @default(now())
+  @@unique([userId, googleSubject])
+  @@unique([id, userId])
+  @@index([status, nextPollAt])
+}
+
+model EmailOAuthState {
+  id String @id
+  userId String
+  verifier String
+  expiresAt DateTime
+}
+
+model SourceDocument {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  connectionId String?
+  connection EmailConnection? @relation(fields: [connectionId, userId], references: [id, userId])
+  accountId String?
+  account Account? @relation(fields: [accountId, userId], references: [id, userId])
+  sourceKey String
+  contentHash String
+  kind String
+  fileName String
+  mimeType String
+  encryptedBytes Bytes?
+  metadata Json
+  status String @default("PENDING")
+  parserVersion String?
+  errorCode String?
+  deletedAt DateTime?
+  statementFrom DateTime? @db.Date
+  statementTo DateTime? @db.Date
+  coverageStatus String @default("UNVERIFIED")
+  observations SourceObservation[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, sourceKey])
+  @@unique([id, userId])
+  @@index([userId, accountId, statementFrom])
+  @@index([userId, status])
+}
+
+model SourceObservation {
+  id String @id @default(cuid())
+  userId String
+  documentId String
+  document SourceDocument @relation(fields: [documentId, userId], references: [id, userId])
+  rowKey String
+  parsed Json
+  rawRow Json
+  transactionId String?
+  transaction Transaction? @relation(fields: [transactionId, userId], references: [id, userId])
+  status String @default("PENDING")
+  reason String?
+  createdAt DateTime @default(now())
+  @@unique([documentId, rowKey])
+  @@index([userId, status])
+}
+
+model ExpenseJob {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  connectionId String
+  connection EmailConnection @relation(fields: [connectionId, userId], references: [id, userId])
+  generation Int
+  kind String
+  from DateTime
+  to DateTime
+  pageToken String?
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  errorCode String?
+  createdAt DateTime @default(now())
+  @@index([status, availableAt])
+  @@index([userId, connectionId])
+}
+
+model ReviewBatch {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  ruleId String?
+  changes ClassificationChange[]
+  createdAt DateTime @default(now())
+  undoneAt DateTime?
+  @@unique([id, userId])
+}
+
+model ClassificationChange {
+  id String @id @default(cuid())
+  userId String
+  batchId String
+  batch ReviewBatch @relation(fields: [batchId, userId], references: [id, userId])
+  transactionId String
+  transaction Transaction @relation(fields: [transactionId, userId], references: [id, userId])
+  before Json
+  afterRevision Int
+  undone Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([userId, transactionId])
+}
+
+model MerchantAlias {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  alias String
+  canonical String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, alias])
 }

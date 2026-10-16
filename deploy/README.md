@@ -116,7 +116,7 @@ updated services:
 ```bash
 cd /opt/apps/expense
 docker compose pull
-docker compose stop api web
+docker compose stop api web expense-worker
 docker compose up -d postgres
 docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy --config apps/api/prisma.config.ts
 docker compose up -d --wait --wait-timeout 90
@@ -140,7 +140,7 @@ the old API before migrating so it cannot serve data during the transition:
 ```bash
 cd /opt/apps/expense
 docker compose pull
-docker compose stop api web
+docker compose stop api web expense-worker
 docker compose run --rm api ./apps/api/node_modules/.bin/prisma migrate deploy --config apps/api/prisma.config.ts
 docker compose up -d --wait --wait-timeout 90
 ```
@@ -242,3 +242,18 @@ api.expense.hbkbimal.xyz
 
 These are deployable service addresses, not host-user assumptions. Replace
 them when deploying a fork under another registry namespace or domain.
+
+## Email expense capture
+
+See [email capture operations](../docs/EMAIL_CAPTURE.md). Add `EXPENSE_DATA_KEY`
+for new uploads and `EXPENSE_TOKEN_KEY` for Gmail before using those features;
+both must be separate 64-character hexadecimal keys. Gmail is disabled by default.
+Replace the deployed Compose file with this version so `expense-worker` is included
+and stopped alongside the API during migrations. The worker uses the same image
+and environment but no HTTP port. Keep template validation empty until real ICICI
+fixtures have passed acceptance checks.
+
+For this release's **pre-merge VPS commands**, PR merge/deploy commands, and
+Google Cloud consent setup, follow [the existing CI/CD runbook](../docs/EMAIL_CAPTURE.md#existing-cicd-deployment-commands).
+The workflow uses the merge commit's image tags, checks configuration before
+stopping traffic, and stops immediately if migration fails.

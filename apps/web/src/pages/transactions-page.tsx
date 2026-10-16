@@ -1,15 +1,22 @@
-import { useMemo, useState } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useSearchParams, Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import {
+  AccountChoice,
+  DateRange,
+} from "@/components/expenses/expense-controls";
+import type { Account } from "./types";
+import { useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -17,18 +24,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { buildQuery } from "@/lib/api-client"
-import { formatDate, formatMoney } from "@/lib/format"
-import { useApiQuery } from "@/lib/use-api-query"
-import type { Transaction } from "@/pages/types"
-import { EmptyState, ErrorState, LoadingState } from "./page-state"
+} from "@/components/ui/table";
+import { buildQuery } from "@/lib/api-client";
+import { formatDate, formatMoney } from "@/lib/format";
+import { useApiQuery } from "@/lib/use-api-query";
+import type { Transaction } from "@/pages/types";
+import { EmptyState, ErrorState, LoadingState } from "./page-state";
 
 const sourceTypes = [
   { value: "all", label: "All sources" },
   { value: "ICICI_BANK", label: "ICICI Bank" },
   { value: "ICICI_AMAZON_PAY_CARD", label: "ICICI Amazon Pay Card" },
-]
+];
 
 const expenseTypes = [
   "all",
@@ -38,27 +45,83 @@ const expenseTypes = [
   "INCOME",
   "REFUND",
   "REVIEW",
-]
+];
 
 export function TransactionsPage() {
-  const [month, setMonth] = useState("")
-  const [sourceType, setSourceType] = useState("all")
-  const [expenseType, setExpenseType] = useState("all")
-  const [search, setSearch] = useState("")
+  const [params] = useSearchParams();
+  const [accountId, setAccountId] = useState(params.get("accountId") ?? "");
+  const [from, setFrom] = useState(""),
+    [to, setTo] = useState("");
+  const [cursor, setCursor] = useState("");
+  const accounts = useApiQuery<Account[]>("/accounts");
+  const [month, setMonth] = useState("");
+  const [sourceType, setSourceType] = useState("all");
+  const [expenseType, setExpenseType] = useState("all");
+  const [search, setSearch] = useState(params.get("search") ?? "");
   const path = useMemo(
     () =>
       `/transactions${buildQuery({
-        month,
+        month: from || to ? undefined : month,
+        from,
+        to,
+        accountId,
+        cursor,
+        limit: "100",
         sourceType: sourceType === "all" ? undefined : sourceType,
         expenseType: expenseType === "all" ? undefined : expenseType,
         search,
       })}`,
-    [expenseType, month, search, sourceType],
-  )
-  const { data, error, isLoading } = useApiQuery<Transaction[]>(path)
+    [expenseType, month, search, sourceType, from, to, accountId, cursor],
+  );
+  const {
+    data: page,
+    error,
+    isLoading,
+  } = useApiQuery<{ items: Transaction[]; nextCursor: string | null }>(path);
+  const data = page?.items ?? null;
 
   return (
     <div className="space-y-5">
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+          <AccountChoice
+            accounts={accounts.data ?? []}
+            value={accountId}
+            onChange={(v) => {
+              setAccountId(v);
+              setCursor("");
+            }}
+          />
+          <DateRange
+            from={from}
+            to={to}
+            onFrom={(v) => {
+              setFrom(v);
+              setCursor("");
+            }}
+            onTo={(v) => {
+              setTo(v);
+              setCursor("");
+            }}
+          />
+        </CardContent>
+      </Card>
+      <div className="flex gap-3">
+        <Button
+          variant="outline"
+          disabled={!cursor}
+          onClick={() => setCursor("")}
+        >
+          First page
+        </Button>
+        <Button
+          variant="outline"
+          disabled={!page?.nextCursor}
+          onClick={() => setCursor(page?.nextCursor ?? "")}
+        >
+          Next page
+        </Button>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
@@ -70,12 +133,23 @@ export function TransactionsPage() {
               id="month"
               type="month"
               value={month}
-              onChange={(event) => setMonth(event.target.value)}
+              onChange={(event) => {
+                setMonth(event.target.value);
+                setFrom("");
+                setTo("");
+                setCursor("");
+              }}
             />
           </div>
           <div className="space-y-2">
             <Label>Source</Label>
-            <Select value={sourceType} onValueChange={setSourceType}>
+            <Select
+              value={sourceType}
+              onValueChange={(v) => {
+                setSourceType(v);
+                setCursor("");
+              }}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -90,7 +164,13 @@ export function TransactionsPage() {
           </div>
           <div className="space-y-2">
             <Label>Expense type</Label>
-            <Select value={expenseType} onValueChange={setExpenseType}>
+            <Select
+              value={expenseType}
+              onValueChange={(v) => {
+                setExpenseType(v);
+                setCursor("");
+              }}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -108,7 +188,10 @@ export function TransactionsPage() {
             <Input
               id="search"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setCursor("");
+              }}
               placeholder="Description, vendor, category"
             />
           </div>
@@ -117,7 +200,7 @@ export function TransactionsPage() {
 
       <TransactionsTable data={data} error={error} isLoading={isLoading} />
     </div>
-  )
+  );
 }
 
 export function TransactionsTable({
@@ -125,20 +208,20 @@ export function TransactionsTable({
   error,
   isLoading,
 }: {
-  data: Transaction[] | null
-  error: string | null
-  isLoading: boolean
+  data: Transaction[] | null;
+  error: string | null;
+  isLoading: boolean;
 }) {
   if (isLoading) {
-    return <LoadingState message="Loading transactions" />
+    return <LoadingState message="Loading transactions" />;
   }
 
   if (error || !data) {
-    return <ErrorState message={error ?? "Transactions are unavailable"} />
+    return <ErrorState message={error ?? "Transactions are unavailable"} />;
   }
 
   if (data.length === 0) {
-    return <EmptyState message="No transactions found" />
+    return <EmptyState message="No transactions found" />;
   }
 
   return (
@@ -174,7 +257,16 @@ export function TransactionsTable({
                 <TableCell className="text-right">
                   {formatMoney(item.moneyIn)}
                 </TableCell>
-                <TableCell>{item.category?.vendor ?? "-"}</TableCell>
+                <TableCell>
+                  <Link to={`/transactions/${item.id}`}>
+                    {item.category?.vendor ?? "Unknown"}
+                  </Link>
+                  <span className="block text-xs text-muted-foreground">
+                    {item.confirmation === "UNCONFIRMED"
+                      ? "Unconfirmed"
+                      : "Posted"}
+                  </span>
+                </TableCell>
                 <TableCell>{item.category?.category ?? "-"}</TableCell>
                 <TableCell>
                   {item.category?.expenseType ? (
@@ -189,5 +281,5 @@ export function TransactionsTable({
         </Table>
       </CardContent>
     </Card>
-  )
+  );
 }

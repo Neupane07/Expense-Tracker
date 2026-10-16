@@ -1,3 +1,5 @@
+import { ReviewModule } from './review/review.module';
+import { EmailCaptureModule } from './email-capture/email-capture.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AccountsModule } from './accounts/accounts.module';
@@ -27,6 +29,8 @@ import { TransactionsModule } from './transactions/transactions.module';
     AuthModule,
     HealthModule,
     AccountsModule,
+    EmailCaptureModule,
+    ReviewModule,
     ImportsModule,
     TransactionsModule,
     RulesModule,

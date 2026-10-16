@@ -104,3 +104,19 @@ See `docs/ROADMAP.md` for scope and exit gates.
 - Prefer additive module contracts over moving stable expense code.
 - Reuse domain services from tools/MCP; do not fork calculations.
 - Do not add broker write operations, MTF/leverage, or F&O.
+
+## Expense email/history migration — 20261004120000
+
+- Adds account lifecycle/identifiers, source evidence, email connections/jobs,
+  independent transaction review/confirmation, and classification audit batches.
+- Preserves IDs and manual classifications; automatic historical card credits
+  become review items without modifying the existing category.
+- Default account currency INR, active/unarchived, unknown opening date. Legacy
+  statement transactions remain posted but do not prove complete monthly coverage.
+- Configure `EXPENSE_DATA_KEY` before new uploads. Gmail stays disabled until the
+  operator supplies separate OAuth settings/token key. See `EMAIL_CAPTURE.md`.
+- Stop `expense-worker` with API/web for migration. No automatic database rollback.
+
+`20261004130000_merchant_aliases` adds user-owned merchant name mappings. The
+preceding migration creates explicit unavailable-original evidence references for
+legacy imports, without changing their transaction IDs or categories.
