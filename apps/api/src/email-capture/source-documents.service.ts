@@ -1,3 +1,4 @@
+import { CARD_ALERT_SENDER } from './icici-mail';
 import {
   DocumentContentStorage,
   PostgresDocumentContentStorage,
@@ -297,6 +298,7 @@ export class SourceDocumentsService {
             ? parseStatementText(await readPdf(bytes, password ?? remembered))
             : parseAlert(
                 (JSON.parse(bytes.toString()) as { text: string }).text,
+                (doc.metadata as Prisma.JsonObject)?.from === CARD_ALERT_SENDER,
               );
     } catch (error) {
       const code =
