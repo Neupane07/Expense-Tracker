@@ -41,14 +41,52 @@ export function isoDate(value: string): string | undefined {
     : value.trim();
   return dateString.safeParse(candidate).success ? candidate : undefined;
 }
-export function parseAlert(text: string): ParseResult {
-  const base = { version: ALERT_VERSION, rows: [], rawRows: [text] };
-  if (
-    /\b(?:OTP|one.time password|declined|unsuccessful|payment request|payment due|due date|minimum amount due)\b/i.test(
-      text,
-    )
-  )
-    return { ...base, ignored: true };
+export function nonTransactionAlert(text: string, cardNotice = false) {
+  // The card receipt includes this static safety notice even on successful purchases.
+  const content = cardNotice
+    ? text.replace(
+        /never\s+share\s+your\s+OTP,\s*URN,\s*CVV\s+or\s+passwords\b/gi,
+        '',
+      )
+    : text;
+  return /\b(?:OTP|one.time password|declined|unsuccessful|payment request|payment due|due date|minimum amount due)\b/i.test(
+    content,
+  );
+}
+export function parseAlert(text: string, cardNotice = false): ParseResult {
+  const base = {
+    version: cardNotice ? 'icici-card-notice-v1' : ALERT_VERSION,
+    rows: [],
+    rawRows: [text],
+  };
+  if (nonTransactionAlert(text, cardNotice)) return { ...base, ignored: true };
+  if (cardNotice) {
+    // Match the receipt sentence, not the credit limits, footer or email delivery date.
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    const purchase =
+      /\bYour ICICI Bank Credit Card XX(\d{4}) has been used for a transaction of INR (\d+(?:,\d{2,3})*\.\d{2}) on ([A-Za-z]{3}) (\d{1,2}), (\d{4}) at (?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\s*\.\s*Info\s*:\s*(.{1,180}?)\.\s*(?=The Available Credit Limit\b|$)/i.exec(
+        normalized,
+      );
+    if (!purchase) return { ...base, error: 'UNSUPPORTED_TEMPLATE' };
+    const [, identifier, amount, month, day, year, merchant] = purchase;
+    const months = 'jan feb mar apr may jun jul aug sep oct nov dec'.split(' ');
+    const parsed = observationSchema.safeParse({
+      transactionDate: isoDate(
+        day + '/' + (1 + months.indexOf(month.toLowerCase())) + '/' + year,
+      ),
+      descriptionRaw: merchant.trim(),
+      merchantKey: merchantKey(merchant),
+      identifier,
+      moneyOut: Number(amount.replace(/,/g, '')),
+      moneyIn: 0,
+      referenceNumber: null,
+      sourceType: 'ICICI_AMAZON_PAY_CARD',
+      currency: 'INR',
+    });
+    return parsed.success
+      ? { ...base, rows: [parsed.data] }
+      : { ...base, error: 'INVALID_TRANSACTION' };
+  }
   const amount = /(?:INR|Rs\.?|₹)\s*([\d,]+\.\d{2})/i.exec(text);
   const date =
     /\b(?:on|dated)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2})\b/i.exec(

@@ -1,3 +1,5 @@
+import { CARD_ALERT_SENDER, iciciSender, senderQuery } from './icici-mail';
+import { nonTransactionAlert } from './expense-parser';
 import {
   BadRequestException,
   ForbiddenException,
@@ -389,7 +391,7 @@ export class GmailService {
       throw new GmailError('CANCELLED');
     const token = await this.accessToken(job.connectionId, job.userId);
     // Versioned allowlist. Unknown senders require a parser/template change, never a user-supplied arbitrary query.
-    const q = `{from:alerts@icicibank.com from:credit_cards@icicibank.com from:customercare@icicibank.com} {subject:transaction subject:statement subject:spent subject:debited subject:credited} after:${Math.floor(job.from.getTime() / 1000)} before:${Math.ceil(job.to.getTime() / 1000)}`;
+    const q = `${senderQuery} {subject:transaction subject:statement subject:spent subject:debited subject:credited} after:${Math.floor(job.from.getTime() / 1000)} before:${Math.ceil(job.to.getTime() / 1000)}`;
     const params = new URLSearchParams({
       q,
       maxResults: '50',
@@ -408,29 +410,14 @@ export class GmailService {
       const headers = message.payload.headers ?? [];
       const header = (name: string) =>
         headers.find((h) => h.name.toLowerCase() === name)?.value ?? '';
-      const from = header('from')
-        .match(/<?([\w.+-]+@icicibank\.com)>?\s*$/i)?.[1]
-        ?.toLowerCase();
-      if (
-        !from ||
-        ![
-          'alerts@icicibank.com',
-          'credit_cards@icicibank.com',
-          'customercare@icicibank.com',
-        ].includes(from)
-      )
-        continue;
+      const subject = header('subject');
       // Use only receiver-provided Authentication-Results; unverified mail stays outside the financial pipeline.
       const authentication = headers
         .filter((h) => h.name.toLowerCase() === 'authentication-results')
         .map((h) => h.value)
         .find((v) => /^mx\.google\.com;/i.test(v));
-      if (
-        !authentication ||
-        !/dmarc=pass\b/i.test(authentication) ||
-        !/header\.from=icicibank\.com\b/i.test(authentication)
-      )
-        continue;
+      const from = iciciSender(header('from'), subject, authentication ?? '');
+      if (!from) continue;
       const parts: GmailPart[] = [];
       const walk = (p: GmailPart) => {
         parts.push(p);
@@ -453,10 +440,11 @@ export class GmailService {
           .replace(/<[^>]*>/g, ' ')
           .replace(/&nbsp;/g, ' ')
           .replace(/&amp;/g, '&');
-      const subject = header('subject');
       const pdfs = parts.filter(
         (p) =>
-          p.mimeType === 'application/pdf' &&
+          (p.mimeType === 'application/pdf' ||
+            (p.mimeType === 'application/octet-stream' &&
+              /\.pdf$/i.test(p.filename ?? ''))) &&
           p.body &&
           (p.body.attachmentId || p.body.data),
       );
@@ -494,15 +482,13 @@ export class GmailService {
               subject,
               messageId: item.id,
               authentication,
-              queryVersion: 'icici-v1',
+              queryVersion: 'icici-v2',
             },
           });
         }
       } else {
         if (
-          /\b(?:OTP|one.time password|declined|unsuccessful|payment request|due date|minimum amount due)\b/i.test(
-            `${subject}\n${text}`,
-          )
+          nonTransactionAlert(subject + '\n' + text, from === CARD_ALERT_SENDER)
         )
           continue;
         if (/statement/i.test(subject)) {
@@ -531,7 +517,7 @@ export class GmailService {
             from,
             subject,
             messageId: item.id,
-            queryVersion: 'icici-v1',
+            queryVersion: 'icici-v2',
           },
         });
       }

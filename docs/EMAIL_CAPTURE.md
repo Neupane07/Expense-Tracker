@@ -60,12 +60,17 @@ work. It does not claim arbitrary ICICI PDF coverage. Statement coverage is
 reconciled only with verified periods, opening/closing balances, matching debit
 and credit totals, validated parser version, and no unresolved observations.
 
-Sender discovery currently covers `alerts@icicibank.com`,
-`credit_cards@icicibank.com`, and `customercare@icicibank.com`, with transaction/
-statement subject filters and Gmail receiver DMARC checks. Validate sender and
-subject variations against real samples before expanding this versioned list.
-An exact sender mismatch or failed authentication is not accepted. No links,
-remote images, or email instructions are followed. Oversized or missing PDF attachments appear as actionable intake failures and are not
+Discovery also supports card purchase notices from `credit_cards@icici.bank.in`
+(template `icici-card-notice-v1`) and monthly bank statements from
+`estatement@icici.bank.in`, in addition to the existing `icicibank.com` senders.
+Both new addresses require a matching subject and Gmail DMARC pass for the
+sender domain. After upgrading, rescan the historical range in Email intake;
+an existing Gmail connection does not need fresh consent. Keep automatic posting
+disabled until statement-cycle validation. For bank/UPI activity notified only by
+SMS, use the monthly bank statement; there is no SMS collection. Map the PDF to
+the correct bank account, then enter its password in the intake prompt. Leave
+“Remember” off for one-time use. An unrecognized PDF layout remains in intake.
+No links, remote images, or email instructions are followed. Oversized or missing PDF attachments appear as actionable intake failures and are not
 parsed; do not use email sync success as evidence of complete account coverage.
 
 ## Processing and control
